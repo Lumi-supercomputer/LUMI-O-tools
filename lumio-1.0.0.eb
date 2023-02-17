@@ -25,7 +25,7 @@ moduleclass='tools'
 
 
 local_rclone_version = '1.61.1'
-local_lumio_tool_version = '0.1.0'
+local_lumio_tool_version = '0.1.1'
 local_restic_version = '0.15.1'
 local_zstd_version = '1.5.4'
 local_s3cmd_version = '2.3.0'
