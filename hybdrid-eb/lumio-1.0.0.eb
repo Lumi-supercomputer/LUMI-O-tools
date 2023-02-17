@@ -14,11 +14,20 @@ Authenticate to LUMI-O
     lumio-conf     
 
 The script will prompt you for project information and authentication keys which can be 
-found from https://auth.lumidata.e/. If the keys expire (Max duration for keys is 168h )
+found from https://auth.lumidata.eu. If the keys expire (Max duration for keys is 168h )
 or you need to switch the project, rerun the command.
 
 Two different rclone remotes are configured: lumi-o and lumi-pub 
 Data pushed to lumi-pub is publicly available using the URL: https://<Project number>.lumidata.eu/<bucket_name>/<object>
+
+To use restic, set the repository to s3:https://lumidata.eu/ and assign then access and secret key
+to the environment variables AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY respectively 
+
+    export AWS_ACCESS_KEY_ID=<MY_ACCESS_KEY>
+    export AWS_SECRET_ACCESS_KEY=<MY_SECRET_ACCESS_KEY>
+    restic -r s3:https://lumidata.eu/<bucket> init
+
+https://lumidata.eu/ is also the s3 API endpoint for e.g raw API calls (not recommended)
 """
 
 moduleclass='tools'

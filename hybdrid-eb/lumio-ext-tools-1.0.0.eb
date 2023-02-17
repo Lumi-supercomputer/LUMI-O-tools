@@ -2,7 +2,7 @@
 easyblock = 'Bundle'
 name = 'lumio-ext-tools'
 version = "1.0.0"
-homepage="https://github.com/Lumi-supercomputer/LUMI-O-tools"
+homepage=""
 whatis = [ 'Description: Basic tooling for LUMI-O. Provides rclone,s3cmd and restic' ]
 description = """
     Bundle of external tools used to access LUMI-O  
@@ -72,9 +72,7 @@ components=[
 ]
 
 # Patch the s3cmd binary so that it does not rely on PYTHONPATH being set,
-# Note that even if the version of the cray python changes in the installation
-# The patch should still apply with some fuzzing...
-local_patch_s3cmd = "--- s3cmd	2023-02-16 16:44:34.000000000 +0200\n+++ s3cmd_fixed	2023-02-16 16:45:09.000000000 +0200\n@@ -1,4 +1,8 @@\n #!/opt/cray/pe/python/3.9.12.1/bin/python3\n # EASY-INSTALL-SCRIPT: 's3cmd==2.3.0','s3cmd'\n+import pathlib\n+script_dir=pathlib.Path(__file__).parent.resolve()\n+import sys\n+sys.path.insert(0,str(script_dir) + f'/../lib/python{sys.version_info[0]}.{sys.version_info[1]}/site-packages/')\n __requires__ = 's3cmd==2.3.0'\n __import__('pkg_resources').run_script('s3cmd==2.3.0', 's3cmd')"
+local_patch_s3cmd = "--- s3cmd	2023-02-16 16:44:34.000000000 +0200\n+++ s3cmd_fixed	2023-02-16 16:45:09.000000000 +0200\n@@ -1,4 +1,8 @@\n #!/usr/bin/python3\n # EASY-INSTALL-SCRIPT: 's3cmd==2.3.0','s3cmd'\n+import pathlib\n+script_dir=pathlib.Path(__file__).parent.resolve()\n+import sys\n+sys.path.insert(0,str(script_dir) + f'/../lib/python{sys.version_info[0]}.{sys.version_info[1]}/site-packages/')\n __requires__ = 's3cmd==2.3.0'\n __import__('pkg_resources').run_script('s3cmd==2.3.0', 's3cmd')"
 
 # Probably not the right way to do this...
 postinstallcmds = [f'patch %(installdir)s/bin/s3cmd <(echo -e "{ local_patch_s3cmd }" )' ,'rm -f %(installdir)s/bin/s3cmd.orig','mv  %(installdir)s/bin/restic_0.15.1_linux_amd64 %(installdir)s/bin/restic && chmod +x %(installdir)s/bin/restic' ]
