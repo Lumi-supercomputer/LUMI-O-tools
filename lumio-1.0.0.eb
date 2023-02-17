@@ -37,7 +37,7 @@ components=[
     ( 'lumio-tools', local_lumio_tool_version , {
         'easyblock': 'MakeCp',
         'source_urls': ['https://github.com/Lumi-supercomputer/LUMI-O-tools/archive/refs/tags/'],
-        'checksums': ['1ddefd35a60af844742a4912132a744fa595a8fafbaa5a56eef35f976ea300d0'],
+        'checksums': ['3a6a6b35a4c5d9892925bc587d51b6d7c7119e4b7d1cad7e015aa41be667e728'],
         'sources': ['v%(version)s.tar.gz'],
         'skipsteps' : ['build'],
         'files_to_copy' : [
