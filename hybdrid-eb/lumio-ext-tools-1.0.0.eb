@@ -1,54 +1,23 @@
 # 
 easyblock = 'Bundle'
-name = 'lumio'
+name = 'lumio-ext-tools'
 version = "1.0.0"
 homepage="https://github.com/Lumi-supercomputer/LUMI-O-tools"
-whatis = [ 'Description: Basic tooling for LUMI-O. Provides the lumio-conf authentication script + rclone,s3cmd and restic' ]
+whatis = [ 'Description: Basic tooling for LUMI-O. Provides rclone,s3cmd and restic' ]
 description = """
-    This module provides the command "lumio-conf" to authenticate to LUMI-O.
-    It also provides the tools rclone,s3cmd and restic for moving data to/from LUMI-O. 
+    Bundle of external tools used to access LUMI-O  
 """ 
-
-usage = """
-Authenticate to LUMI-O
-    lumio-conf     
-
-The script will prompt you for project information and authentication keys which can be 
-found from https://auth.lumidata.e/. If the keys expire (Max duration for keys is 168h )
-or you need to switch the project, rerun the command.
-
-Two different rclone remotes are configured: lumi-o and lumi-pub 
-Data pushed to lumi-pub is publicly available using the URL: https://<Project number>.lumidata.eu/<bucket_name>/<object>
-"""
 
 moduleclass='tools'
 
 
 local_rclone_version = '1.61.1'
-local_lumio_tool_version = '0.1.1'
 local_s3cmd_version = '2.3.0'
 local_restic_version = '0.15.1'
-#local_zstd_version = '1.5.4'
-#local_zlib_version = '1.2.11'
 
 
 toolchain = SYSTEM
 components=[
-    ( 'lumio-tools', local_lumio_tool_version , {
-        'easyblock': 'MakeCp',
-        'source_urls': ['https://github.com/Lumi-supercomputer/LUMI-O-tools/archive/refs/tags/'],
-        'checksums': ['47de77e6806160f8edd156d71e08855f3cc9adb828993e80104a03e9702ad2c1'],
-        'sources': ['v%(version)s.tar.gz'],
-        'skipsteps' : ['build'],
-        'files_to_copy' : [
-            (['LUMI-O-tools-%(version)s/lumio-conf'],   'bin')
-        ],
-    
-        'sanity_check_paths' : {
-            'files': ['bin/lumio-conf'],
-            'dirs':  []
-        }
-    }),
     # Static go built binary
     ('rclone',local_rclone_version,{
         'easyblock': 'MakeCp',
@@ -91,26 +60,6 @@ components=[
         
         'sanity_check_commands' : ['restic version']
     }),
-
-   # ('zstd',local_zstd_version,{ 
-   #     'easyblock' : 'ConfigureMake',
-   #     'source_urls' : ['https://github.com/facebook/%(name)s/releases/download/v%(version)s/'],
-   #     'sources' :     ['%(name)s-%(version)s.tar.gz'],
-   #     'skipsteps':['configure'],
-   #     'build_cmd' : 'cd %(name)s-%(version)s && make',
-   #     'install_cmd':'cd %(name)s-%(version)s && make install PREFIX=%(installdir)s',
-   # }),
-   # ('zlib',local_zlib_version,{ 
-   #     'easyblock' : 'ConfigureMake',
-   #     'source_urls' : ['https://zlib.net/fossils'],
-   #     'sources' : ['%(name)s-%(version)s.tar.gz'],
-   #     'configure_cmd' : 'cd %(name)s-%(version)s && ./configure --prefix=%(installdir)s',
-   #     'build_cmd' : 'cd %(name)s-%(version)s && make',
-   #     'install_cmd':'cd %(name)s-%(version)s && make install PREFIX=%(installdir)s',
-   # }),
-    # Will use the system python for maximum robustness
-    # So that this will work even if the cray python in updated / deprecated
-    # 2.3.0 is available for python 3.6 so there should be no compatibility issues
     ('s3cmd',local_s3cmd_version,{
        'easyblock': 'PythonPackage',
         'source_urls': ['https://files.pythonhosted.org/packages/97/10/5ae9b5c69d0482dda2927c67a4db26a3e9e064964577a81be9239a419b3f/'],
@@ -128,4 +77,4 @@ components=[
 local_patch_s3cmd = "--- s3cmd	2023-02-16 16:44:34.000000000 +0200\n+++ s3cmd_fixed	2023-02-16 16:45:09.000000000 +0200\n@@ -1,4 +1,8 @@\n #!/opt/cray/pe/python/3.9.12.1/bin/python3\n # EASY-INSTALL-SCRIPT: 's3cmd==2.3.0','s3cmd'\n+import pathlib\n+script_dir=pathlib.Path(__file__).parent.resolve()\n+import sys\n+sys.path.insert(0,str(script_dir) + f'/../lib/python{sys.version_info[0]}.{sys.version_info[1]}/site-packages/')\n __requires__ = 's3cmd==2.3.0'\n __import__('pkg_resources').run_script('s3cmd==2.3.0', 's3cmd')"
 
 # Probably not the right way to do this...
-postinstallcmds = [f'patch %(installdir)s/bin/s3cmd <(echo -e "{ local_patch_s3cmd }" )' ,'mv  %(installdir)s/bin/restic_0.15.1_linux_amd64 %(installdir)s/bin/restic && chmod +x %(installdir)s/bin/restic' ]
+postinstallcmds = [f'patch %(installdir)s/bin/s3cmd <(echo -e "{ local_patch_s3cmd }" )' ,'rm -f %(installdir)s/bin/s3cmd.orig','mv  %(installdir)s/bin/restic_0.15.1_linux_amd64 %(installdir)s/bin/restic && chmod +x %(installdir)s/bin/restic' ]

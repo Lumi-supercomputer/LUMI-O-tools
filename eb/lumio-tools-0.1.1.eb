@@ -21,7 +21,7 @@ sources = [{
         'repo_name': 'LUMI-O-tools',
         'tag':       'v%(version)s'
     },
-    'extract_cmd': 'tar --strip-components=1 -xf %s'
+    'extract_cmd': 'tar --strip-components=1 -xf %s && mkdir bin && mv lumio-conf bin',
 }]
 sanity_check_paths = { 
     'files': ['bin/lumio-conf'],
