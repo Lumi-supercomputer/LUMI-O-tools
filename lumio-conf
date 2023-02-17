@@ -103,11 +103,6 @@ while [[ $# -ge 1 ]]; do
     esac
 done
 
-
-if [ ${0:(-4):4} != "bash" -a "$force" == "false" ]; then
-    echo "Error: lumio_conf should not be executed directly. $usage" >&2
-    exit 1
-fi
 case "$mode" in
     's3remove')
         local use_s3cmd=false
