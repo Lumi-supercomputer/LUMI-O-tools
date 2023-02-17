@@ -159,6 +159,7 @@ if [[ $mode == "lumi" ]]; then
    echo 'endpoint = https://lumidata.eu' >>  $HOME/.config/rclone/rclone.conf
    echo 'acl = private' >>  $HOME/.config/rclone/rclone.conf
 
+   echo ""	
    echo "rclone remote lumi-o: now provides an S3 based connection to Lumi-O storage area of project $lumi_project_number."
    echo ""
    echo ""  >>  $HOME/.config/rclone/rclone.conf
@@ -173,7 +174,7 @@ if [[ $mode == "lumi" ]]; then
    echo 'acl = public-read' >>  $HOME/.config/rclone/rclone.conf
 
    echo "rclone remote lumi-pub: now provides an S3 based connection to Lumi-O storage area of project $lumi_project_number."
-   echo ""
+   echo -e "\t Data pushed here is publicly available using the URL: https://462000140.lumidata.eu/<bucket_name>/<object>"
 
    #S3cmd parameters
    rm -f $HOME/.s3cfg
