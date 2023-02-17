@@ -1,0 +1,15 @@
+easyblock = 'Bundle'
+
+name = 'lumio'
+version = "1.0.0"
+homepage="https://github.com/Lumi-supercomputer/LUMI-O-tools"
+
+toolchain = SYSTEM
+dependencies =   [
+('restic','0.15.1'),
+('rclone','1.59.0'),
+('lumio-tools','0.1.1'),
+('s3cmd','2.3.0')
+]
+description = """Bundle of lumi-o tools""" 
+moduleclass='tools'

@@ -26,10 +26,10 @@ moduleclass='tools'
 
 local_rclone_version = '1.61.1'
 local_lumio_tool_version = '0.1.1'
-local_restic_version = '0.15.1'
-local_zstd_version = '1.5.4'
 local_s3cmd_version = '2.3.0'
-local_zlib_version = '1.2.11'
+#local_restic_version = '0.15.1'
+#local_zstd_version = '1.5.4'
+#local_zlib_version = '1.2.11'
 
 
 toolchain = SYSTEM
@@ -92,22 +92,22 @@ components=[
         'sanity_check_commands' : ['restic version']
     }),
 
-    ('zstd',local_zstd_version,{ 
-        'easyblock' : 'ConfigureMake',
-        'source_urls' : ['https://github.com/facebook/%(name)s/releases/download/v%(version)s/'],
-        'sources' :     ['%(name)s-%(version)s.tar.gz'],
-        'skipsteps':['configure'],
-        'build_cmd' : 'cd %(name)s-%(version)s && make',
-        'install_cmd':'cd %(name)s-%(version)s && make install PREFIX=%(installdir)s',
-    }),
-    ('zlib',local_zlib_version,{ 
-        'easyblock' : 'ConfigureMake',
-        'source_urls' : ['https://zlib.net/fossils'],
-        'sources' : ['%(name)s-%(version)s.tar.gz'],
-        'configure_cmd' : 'cd %(name)s-%(version)s && ./configure --prefix=%(installdir)s',
-        'build_cmd' : 'cd %(name)s-%(version)s && make',
-        'install_cmd':'cd %(name)s-%(version)s && make install PREFIX=%(installdir)s',
-    }),
+   # ('zstd',local_zstd_version,{ 
+   #     'easyblock' : 'ConfigureMake',
+   #     'source_urls' : ['https://github.com/facebook/%(name)s/releases/download/v%(version)s/'],
+   #     'sources' :     ['%(name)s-%(version)s.tar.gz'],
+   #     'skipsteps':['configure'],
+   #     'build_cmd' : 'cd %(name)s-%(version)s && make',
+   #     'install_cmd':'cd %(name)s-%(version)s && make install PREFIX=%(installdir)s',
+   # }),
+   # ('zlib',local_zlib_version,{ 
+   #     'easyblock' : 'ConfigureMake',
+   #     'source_urls' : ['https://zlib.net/fossils'],
+   #     'sources' : ['%(name)s-%(version)s.tar.gz'],
+   #     'configure_cmd' : 'cd %(name)s-%(version)s && ./configure --prefix=%(installdir)s',
+   #     'build_cmd' : 'cd %(name)s-%(version)s && make',
+   #     'install_cmd':'cd %(name)s-%(version)s && make install PREFIX=%(installdir)s',
+   # }),
     # Will use the system python for maximum robustness
     # So that this will work even if the cray python in updated / deprecated
     # 2.3.0 is available for python 3.6 so there should be no compatibility issues
@@ -126,7 +126,7 @@ components=[
 # Note that even if the version of the cray python changes in the installation
 # The patch should still apply with some fuzzing...
 local_patch_s3cmd = "--- s3cmd	2023-02-16 16:44:34.000000000 +0200\n+++ s3cmd_fixed	2023-02-16 16:45:09.000000000 +0200\n@@ -1,4 +1,8 @@\n #!/opt/cray/pe/python/3.9.12.1/bin/python3\n # EASY-INSTALL-SCRIPT: 's3cmd==2.3.0','s3cmd'\n+import pathlib\n+script_dir=pathlib.Path(__file__).parent.resolve()\n+import sys\n+sys.path.insert(0,str(script_dir) + f'/../lib/python{sys.version_info[0]}.{sys.version_info[1]}/site-packages/')\n __requires__ = 's3cmd==2.3.0'\n __import__('pkg_resources').run_script('s3cmd==2.3.0', 's3cmd')"
-
+postinstallcmds = [f'patch %(installdir)s/bin/s3cmd <(echo -e "{ local_patch_s3cmd }" )']
 
 # Probably not the right way to do this...
-postinstallcmds = [f'patch %(installdir)s/bin/s3cmd <(echo -e "{ local_patch_s3cmd }" )' ,'mv  %(installdir)s/bin/restic_0.15.1_linux_amd64 %(installdir)s/bin/restic && chmod +x %(installdir)s/bin/restic' ]
+# postinstallcmds = [f'patch %(installdir)s/bin/s3cmd <(echo -e "{ local_patch_s3cmd }" )' ,'mv  %(installdir)s/bin/restic_0.15.1_linux_amd64 %(installdir)s/bin/restic && chmod +x %(installdir)s/bin/restic' ]

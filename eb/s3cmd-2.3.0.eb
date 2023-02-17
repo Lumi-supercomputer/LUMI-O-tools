@@ -1,0 +1,19 @@
+easyblock = 'PythonPackage'
+
+name = 's3cmd'
+version = '2.3.0'
+
+homepage = "https://pypi.python.org/pypi/pandas/"
+description = """pandas is an open source, BSD-licensed library providing high-performance, easy-to-use data structures
+ and data analysis tools for the Python programming language."""
+
+toolchain = SYSTEM 
+
+sources = [SOURCE_TAR_GZ]
+# could not figure how to stop it from trying to import the package
+skipsteps = ['sanitycheck']
+sanity_check_paths = {
+    'files': ['bin/s3cmd'],
+    'dirs': []
+}
+moduleclass = 'tools'

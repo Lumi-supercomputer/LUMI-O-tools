@@ -1,0 +1,33 @@
+toolchain = SYSTEM
+easyblock = 'Binary'
+
+name =    'lumio-tools'
+version = '0.1.1'
+
+homepage = 'https://github.com/Lumi-supercomputer/LUMI-O-tools'
+
+whatis = [
+ 'script sets up the environment variables and the configuration files for accessing LUMI-O storage service'
+]
+
+description = """
+Basic tools to enable connection and authentication to LUMI-O
+"""
+
+sources = [{
+    'filename':          '%(namelower)s-%(version)s.tar.gz',
+    'git_config': {
+    	'url':       'https://github.com/Lumi-supercomputer',
+        'repo_name': 'LUMI-O-tools',
+        'tag':       'v%(version)s'
+    },
+    'extract_cmd': 'tar --strip-components=1 -xf %s'
+}]
+sanity_check_paths = { 
+    'files': ['bin/lumio-conf'],
+    'dirs': []
+}
+skipsteps=["install"]
+toolchain = SYSTEM
+extract_sources = 'True'
+buildininstalldir = 'True'
