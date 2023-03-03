@@ -184,9 +184,9 @@ if [[ "$chunk_size" -lt 5 || "$chunk_size" -gt 5000 || \
 fi
 
 
-if [[ ${chunk_size+defined} ]]; do
+if [[ ${chunk_size+defined} ]]; then
    echo "multipart_chunk_size_mb = $chunk_size"  >> $HOME/.s3cfg
-done
+fi
 
 _tools=(s3cmd rclone restic)
 for t in "${_tools[@]}";do
