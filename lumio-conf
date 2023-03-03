@@ -46,7 +46,7 @@ local storage_service=("lumio")
 local silent_mode=false
 local active_mode=false
 local echop=echo
-local chunk_size=5000
+local chunk_size=15
 local rconf=$HOME/.config/rclone/rclone.conf
 #these are used in curl authentication
 local s3remove=false
@@ -173,7 +173,6 @@ echo "use_https = True" >> $HOME/.s3cfg
   echo "storage_service=lumi" >> $HOME/.lo_tools_conf
   echo "mode=lumi" >> $HOME/.lo_tools_conf
   echo "os_project_name=${lumi_project_number}" >> $HOME/.lo_tools_conf
-return
 
 
 
@@ -184,7 +183,7 @@ if [[ "$chunk_size" -lt 5 || "$chunk_size" -gt 5000 || \
 fi
 
 
-if [[ ${chunk_size+defined} ]]; then
+if [[ -n ${chunk_size} ]]; then
    echo "multipart_chunk_size_mb = $chunk_size"  >> $HOME/.s3cfg
 fi
 
@@ -194,20 +193,6 @@ for t in "${_tools[@]}";do
         echo "NOTE: $t command was not found."
     fi
 done
-
-#rclone configuration file check
-if [[ $(grep -c "\[$storage_service\]"  $HOME/.config/rclone/rclone.conf 2> /dev/null ) -lt 1 ]]; then
-       mkdir -p  $HOME/.config/rclone/
-       echo '['"$storage_service"']' >> $HOME/.config/rclone/rclone.conf
-       echo 'type = swift' >>  $HOME/.config/rclone/rclone.conf
-       echo 'env_auth = true'  >>  $HOME/.config/rclone/rclone.conf
-       if [[ $silent_mode = "false" ]]; then
-           echo ""
-           echo "$storage_service service added to the rclone configuration file."
-       fi
-fi
-
-echo "Configuration will be done for project: $OS_PROJECT_NAME"
 
 
 ## 7. Create lumio_default and unset some variables
