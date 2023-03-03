@@ -33,7 +33,7 @@ Usage: lumio-conf [OPTIONS] [PROJECT]
 
      -c, --chuncksize SIZE    s3cmd chunk size, 5-5000, Files larger than
                               SIZE, in MB, are automatically uploaded
-                              multithread-multipart  (default: 5000)
+                              multithread-multipart  (default: 15)
 
      -p, --project            Define LUMI-project to be used.
 
@@ -163,6 +163,7 @@ echo "enable_multipart = True" >> $HOME/.s3cfg
 echo "signature_v2 = True" >> $HOME/.s3cfg
 echo "use_https = True" >> $HOME/.s3cfg
 
+
  # define Lumi-o in customer defaults
   if [[ -e $HOME/.lp_tools_conf ]]; then
      grep -v "storage_service=" $HOME/.lo_tools_conf | grep -v "mode=" | grep -v "os_project_name=" > $HOME/.lo_tools_conf_$$
@@ -181,6 +182,11 @@ if [[ "$chunk_size" -lt 5 || "$chunk_size" -gt 5000 || \
     echo "\nError: Invalid chuck size. $usage" >&2
     return 1
 fi
+
+
+if [[ ${chunk_size+defined} ]]; do
+   echo "multipart_chunk_size_mb = $chunk_size"  >> $HOME/.s3cfg
+done
 
 _tools=(s3cmd rclone restic)
 for t in "${_tools[@]}";do
