@@ -149,7 +149,7 @@ echo 'endpoint = https://lumidata.eu' >>  $HOME/.config/rclone/rclone.conf
 echo 'acl = public-read' >>  $HOME/.config/rclone/rclone.conf
 
 echo "rclone remote lumi-pub: now provides an S3 based connection to Lumi-O storage area of project $lumi_project_number."
-echo -e "\t Data pushed here is publicly available using the URL: https://462000140.lumidata.eu/<bucket_name>/<object>"
+echo -e "\t Data pushed here is publicly available using the URL: https://$lumi_project_number.lumidata.eu/<bucket_name>/<object>"
 
 #S3cmd parameters
 rm -f $HOME/.s3cfg
