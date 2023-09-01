@@ -14,12 +14,46 @@ if [[ $shell_check -ne 1 ]]; then
 fi
 
 
+g='
+import sys
+import configparser
+config = configparser.ConfigParser()
+config.read(sys.argv[1])
+config.remove_section(sys.argv[2])
+with open(sys.argv[1], "w") as f:
+    config.write(f)
+'
+
+delete_s3_ini_section(){
+    /usr/bin/python3 -c "$g" $1 $2
+
+}
+
+
+
 export OS_PROJECT_NAME=""
 export OS_USERNAME=$(whoami)
 
+create_tmp_config(){
+    local rand_hash=$(echo $RANDOM | md5sum | head -c 20; echo;)
 
+    if [[ -z ${TMPDIR+defined} ]];then
+        local TMPDIR=/tmp/$USER
+    fi
+
+    mkdir -p $TMPDIR/lumio-temp-$rand_hash
+    chmod og-rwx $TMPDIR/lumio-temp-$rand_hash
+
+    touch $TMPDIR/lumio-temp-$rand_hash/temp_rclone.config
+    chmod go-rwx $TMPDIR/lumio-temp-$rand_hash/temp_rclone.config
+    if [[ -e $1 ]];then
+        cp $1 $TMPDIR/lumio-temp-$rand_hash/temp_rclone.config
+    fi
+    echo $TMPDIR/lumio-temp-$rand_hash/temp_rclone.config
+}
 
 lumio_conf_scope () {
+
 
 local usage="
 
@@ -31,15 +65,19 @@ Usage: lumio-conf [OPTIONS] [PROJECT]
     OPTIONS
     -------
 
-     -c, --chuncksize SIZE    s3cmd chunk size, 5-5000, Files larger than
-                              SIZE, in MB, are automatically uploaded
-                              multithread-multipart  (default: 15)
+     -c, --chuncksize SIZE        s3cmd chunk size, 5-5000, Files larger than
+                                  SIZE, in MB, are automatically uploaded
+                                  multithread-multipart  (default: 15)
 
-     -p, --project            Define LUMI-project to be used.
+     -p, --project                Define LUMI-project to be used.
 
-     -s, --silent             Less output
+     -s, --silent                 Less output
 
-     --s3remove               Remove S3 access key
+     --debug                      Keep temporary configs for debugging 
+
+     --keep-default-s3cmd-config  Don't set the new configuration as default for s3cmd
+
+     --s3remove                   Remove S3 access key
 "
 
 local storage_service=("lumio")
@@ -62,6 +100,7 @@ while [[ $# -ge 1 ]]; do
         '-c'|'--chunksize')     chunk_size="$2";         shift 2;;
         '--s3remove' )          s3remove=true;           shift;;
         '--debug' )             debug=true;              shift;;
+        '--keep-default-s3cmd-config' ) keep_default_s3cmd_config=true; shift;;
         '-p'|'--project' )
           if [[ -z $2 ]]; then
               if [[ ${2::1} != "-" ]];then
@@ -79,17 +118,28 @@ while [[ $# -ge 1 ]]; do
     esac
 done
 
+
+
 # Fix me  (fetch from auth.lumidata.eu)
 # Option to remove s3cmd key
 if $s3remove; then
 
     echo "s3 access key removal requested" 
     echo "Key management from the command line is not currently possible go to https://auth.lumidata.eu to manage keys".
-    echo "To revoke access on this machine only, remove the access_key and secret_key entires from ~/.config/rclone/rclone.conf and ~/.s3cfg "
+    echo "To revoke access on this machine only, remove the access_key and secret_key entires from ~/.config/rclone/rclone.conf, ~/.s3cfg and ~/.s3cfg-lumi-<project_number> "
     exit 1
 
 fi
 
+_tools=(s3cmd rclone )
+for t in "${_tools[@]}";do
+    if ! command -v $t >/dev/null 2>&1; then
+        echo "NOTE: $t command was not found."
+    fi
+done
+
+
+echo "=========== PROMPTING USER INPUT ==========="
 
 echo "Please login to  https://auth.lumidata.eu/"
 echo "In the web interface, choose first the project you wish to use."
@@ -118,50 +168,134 @@ export S3_HOSTNAME=lumidata.eu;
 storage_service="lumi"
 export OS_PROJECT_NAME=$lumi_project_number
 
+
+echo "=========== CONFIGURING RCLONE ==========="
+local tmp_rclone_config=$(create_tmp_config $HOME/.config/rclone/rclone.conf )
+if [[ ! -z ${RCLONE_CONFIG+defined} ]];then
+    OLD_RCLONE_CONFIG=$RCLONE_CONFIG 
+fi
+RCLONE_CONFIG=$tmp_rclone_config
+
 #rclone parameters
-rclone config delete lumi-o
-rclone config delete lumi-pub
+rclone config delete lumi-o-$lumi_project_number
+rclone config delete lumi-pub-$lumi_project_number
 mkdir -p  $HOME/.config/rclone/
-echo "" >> $HOME/.config/rclone/rclone.conf
-chmod go-rwx $HOME/.config/rclone/rclone.conf
-echo '[lumi-o]' >>  $HOME/.config/rclone/rclone.conf
-#echo '['$storage_service']' >>  $HOME/.config/rclone/rclone.conf
-echo 'type = s3' >>  $HOME/.config/rclone/rclone.conf
-echo 'provider = Ceph' >>  $HOME/.config/rclone/rclone.conf
-echo 'env_auth = false' >>  $HOME/.config/rclone/rclone.conf
-echo "access_key_id = $S3_ACCESS_KEY_ID" >> $HOME/.config/rclone/rclone.conf
-echo "secret_access_key = $S3_SECRET_ACCESS_KEY" >> $HOME/.config/rclone/rclone.conf
-echo 'endpoint = https://lumidata.eu' >>  $HOME/.config/rclone/rclone.conf
-echo 'acl = private' >>  $HOME/.config/rclone/rclone.conf
+echo "" >> $tmp_rclone_config
+chmod go-rwx $tmp_rclone_config
+echo "[lumi-o-$lumi_project_number]" >>  $tmp_rclone_config
+#echo '['$storage_service']' >>  $tmp_rclone_config
+echo 'type = s3' >>  $tmp_rclone_config
+echo 'provider = Ceph' >>  $tmp_rclone_config
+echo 'env_auth = false' >>  $tmp_rclone_config
+echo "access_key_id = $S3_ACCESS_KEY_ID" >> $tmp_rclone_config
+echo "secret_access_key = $S3_SECRET_ACCESS_KEY" >> $tmp_rclone_config
+echo 'endpoint = https://lumidata.eu' >>  $tmp_rclone_config
+echo 'acl = private' >>  $tmp_rclone_config
 
-echo ""	
-echo "rclone remote lumi-o: now provides an S3 based connection to Lumi-O storage area of project $lumi_project_number."
-echo ""
-echo ""  >>  $HOME/.config/rclone/rclone.conf
-echo '[lumi-pub]' >>  $HOME/.config/rclone/rclone.conf
-#echo '['$storage_service']' >>  $HOME/.config/rclone/rclone.conf
-echo 'type = s3' >>  $HOME/.config/rclone/rclone.conf
-echo 'provider = Ceph' >>  $HOME/.config/rclone/rclone.conf
-echo 'env_auth = false' >>  $HOME/.config/rclone/rclone.conf
-echo "access_key_id = $S3_ACCESS_KEY_ID" >> $HOME/.config/rclone/rclone.conf
-echo "secret_access_key = $S3_SECRET_ACCESS_KEY" >> $HOME/.config/rclone/rclone.conf
-echo 'endpoint = https://lumidata.eu' >>  $HOME/.config/rclone/rclone.conf
-echo 'acl = public-read' >>  $HOME/.config/rclone/rclone.conf
+echo ""  >>  $tmp_rclone_config
+echo "[lumi-pub-$lumi_project_number]" >>  $tmp_rclone_config
+#echo '['$storage_service']' >>  $tmp_rclone_config
+echo 'type = s3' >>  $tmp_rclone_config
+echo 'provider = Ceph' >>  $tmp_rclone_config
+echo 'env_auth = false' >>  $tmp_rclone_config
+echo "access_key_id = $S3_ACCESS_KEY_ID" >> $tmp_rclone_config
+echo "secret_access_key = $S3_SECRET_ACCESS_KEY" >> $tmp_rclone_config
+echo 'endpoint = https://lumidata.eu' >>  $tmp_rclone_config
+echo 'acl = public-read' >>  $tmp_rclone_config
 
-echo "rclone remote lumi-pub: now provides an S3 based connection to Lumi-O storage area of project $lumi_project_number."
-echo -e "\t Data pushed here is publicly available using the URL: https://$lumi_project_number.lumidata.eu/<bucket_name>/<object>"
+if output=$(rclone ls lumi-o-$lumi_project_number: 2>&1 ) ; then
+   cp $tmp_rclone_config $HOME/.config/rclone/rclone.conf
+   echo ""	
+   echo "rclone remote lumi-o-$lumi_project_number: now provides an S3 based connection to Lumi-O storage area of project $lumi_project_number."
+   echo ""
+   echo "rclone remote lumi-pub-$lumi_project_number: now provides an S3 based connection to Lumi-O storage area of project $lumi_project_number."
+   echo -e "\t Data pushed here is publicly available using the URL: https://$lumi_project_number.lumidata.eu/<bucket_name>/<object>"
+else 
+   echo "Failed to validate new remote"
+   echo "No new remote was added"
+   echo "Double check that the correct details were entered"
+   echo "Run with --debug to keep the generated temporary configuration"
+   echo "The error was: $output"
+fi
+if [[ $debug == "true" ]];then 
+    echo ""
+    echo "Generated rclone config has been saved to $tmp_rclone_config"  
+    echo "IMPORTANT: When troubleshooting, DO NOT share the whole $tmp_rclone_config file!"
+    echo "ONLY share the info related to the specific failed endpoint lumi-o-$lumi_project_number"
+else
+ rm $tmp_rclone_config 
+ rmdir $(dirname $tmp_rclone_config)
+fi
+
+if [[ ! -z ${OLD_RCLONE_CONFIG+defined} ]];then
+    RCLONE_CONFIG=$OLD_RCLONE_CONFIG
+    unset OLD_RCLONE_CONFIG
+fi
+ 
+
 
 #S3cmd parameters
-rm -f $HOME/.s3cfg
-echo '[lumi-'${lumi_project_number}']' > $HOME/.s3cfg
-echo "access_key   = $S3_ACCESS_KEY_ID" >> $HOME/.s3cfg
-echo "secret_key   = $S3_SECRET_ACCESS_KEY"  >> $HOME/.s3cfg
-echo "host_base    = https://lumidata.eu" >> $HOME/.s3cfg
-echo "host_bucket  = https://lumidata.eu" >> $HOME/.s3cfg
-echo "human_readable_sizes = True" >> $HOME/.s3cfg
-echo "enable_multipart = True" >> $HOME/.s3cfg
-echo "signature_v2 = True" >> $HOME/.s3cfg
-echo "use_https = True" >> $HOME/.s3cfg
+# As far as we are aware there is no way to configure multiple 
+#  endpoints in a single configuration file....
+echo ""
+echo "=========== CONFIGURING S3CMD ==========="
+
+local tmp_s3cmd_config=$(create_tmp_config $HOME/.s3cfg)
+delete_s3_ini_section $tmp_s3cmd_config "lumi-${lumi_project_number}"
+
+echo '[lumi-'${lumi_project_number}']' > $tmp_s3cmd_config
+echo "access_key   = $S3_ACCESS_KEY_ID" >> $tmp_s3cmd_config
+echo "secret_key   = $S3_SECRET_ACCESS_KEY"  >> $tmp_s3cmd_config
+echo "host_base    = https://lumidata.eu" >> $tmp_s3cmd_config
+echo "host_bucket  = https://lumidata.eu" >> $tmp_s3cmd_config
+echo "human_readable_sizes = True" >> $tmp_s3cmd_config
+echo "enable_multipart = True" >> $tmp_s3cmd_config
+echo "signature_v2 = True" >> $tmp_s3cmd_config
+echo "use_https = True" >> $tmp_s3cmd_config
+
+
+
+
+if [[ "$chunk_size" -lt 5 || "$chunk_size" -gt 5000 || \
+          ! "$chunk_size" =~ ^[0-9]+$ ]]; then
+    echo "\nError: Invalid chuck size. $usage" >&2
+    return 1
+fi
+
+
+if [[ -n ${chunk_size} ]]; then
+   echo "multipart_chunk_size_mb = $chunk_size"  >> $tmp_s3cmd_config
+fi
+
+# S3CMD_CONFIG
+if output=$(s3cmd -c $tmp_s3cmd_config ls s3: 2>&1 ) ; then
+    echo ""
+    echo "Created s3cmd config for ${lumi_project_number}"
+    echo -e "\tOther existing configurations can be accessed by adding the -c flag"
+    echo -e "\ts3cmd -c ~/.s3cfg-lumi-<project_number> COMMAND ARGS"
+    cp $tmp_s3cmd_config $HOME/.s3cfg-lumi-${lumi_project_number} 
+    if [[ ! "$keep_default_s3cmd_config" == "true" || ! -e $HOME/.s3cfg ]]; then
+        echo ""
+        test -e $HOME/.s3cfg || echo "No default s3cmd config exists"
+        echo "Switching default s3cmd config to $HOME/.s3cfg-lumi-${lumi_project_number}"
+        ln -fs $HOME/.s3cfg-lumi-${lumi_project_number} $HOME/.s3cfg
+    else
+        echo ""
+        echo "Default s3cmd config was not chaged, current default is $(cat ~/.s3cfg  | grep "^\[" |   sed 's/[][]//g')"
+        echo -e "\tEither set S3CMD_CONFIG to $HOME/.s3cfg-lumi-${lumi_project_number}"
+        echo -e "\tOr use the -c flag on the commandline to use the generated config"
+        echo -e "\ts3cmd -c $HOME/.s3cfg-lumi-${lumi_project_number} COMMAND ARGS"
+    fi
+else
+    echo "Failed to validate s3cmd config"
+fi
+
+if [[ $debug == "true" ]];then 
+    echo "Generated s3cmd config has been saved to $tmp_s3cmd_config"  
+else
+ rm $tmp_s3cmd_config 
+ rmdir $(dirname $tmp_s3cmd_config)
+fi
 
 
  # define Lumi-o in customer defaults
@@ -175,24 +309,6 @@ echo "use_https = True" >> $HOME/.s3cfg
   echo "os_project_name=${lumi_project_number}" >> $HOME/.lo_tools_conf
 
 
-
-if [[ "$chunk_size" -lt 5 || "$chunk_size" -gt 5000 || \
-          ! "$chunk_size" =~ ^[0-9]+$ ]]; then
-    echo "\nError: Invalid chuck size. $usage" >&2
-    return 1
-fi
-
-
-if [[ -n ${chunk_size} ]]; then
-   echo "multipart_chunk_size_mb = $chunk_size"  >> $HOME/.s3cfg
-fi
-
-_tools=(s3cmd rclone restic)
-for t in "${_tools[@]}";do
-    if ! command -v $t >/dev/null 2>&1; then
-        echo "NOTE: $t command was not found."
-    fi
-done
 
 
 ## 7. Create lumio_default and unset some variables
