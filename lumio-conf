@@ -24,7 +24,7 @@ with open(sys.argv[1], "w") as f:
     config.write(f)
 '
 
-delete_s3_ini_section(){
+delete_ini_section(){
     /usr/bin/python3 -c "$g" $1 $2
 
 }
@@ -69,13 +69,16 @@ Usage: lumio-conf [OPTIONS] [PROJECT]
                                   SIZE, in MB, are automatically uploaded
                                   multithread-multipart  (default: 15)
 
-     -p, --project                Define LUMI-project to be used.
+     -p, --project <projnum>      Define LUMI-project to be used.
 
      -s, --silent                 Less output
 
      --debug                      Keep temporary configs for debugging 
 
      --keep-default-s3cmd-config  Don't set the new configuration as default for s3cmd
+
+     --skip-validation            Don't verify endpoint configuration before saving
+                                    WARNING: Might lead to a broken config
 
      --s3remove                   Remove S3 access key
 "
@@ -101,6 +104,7 @@ while [[ $# -ge 1 ]]; do
         '--s3remove' )          s3remove=true;           shift;;
         '--debug' )             debug=true;              shift;;
         '--keep-default-s3cmd-config' ) keep_default_s3cmd_config=true; shift;;
+        '--skip-validation' )   skip_validation=true;              shift ;;
         '-p'|'--project' )
           if [[ -z $2 ]]; then
               if [[ ${2::1} != "-" ]];then
@@ -118,6 +122,10 @@ while [[ $# -ge 1 ]]; do
     esac
 done
 
+if [[ $skip_validation == "true" ]];then
+    skip_rclone_validation=true
+    skip_s3cmd_validation=true
+fi
 
 
 # Fix me  (fetch from auth.lumidata.eu)
@@ -131,13 +139,18 @@ if $s3remove; then
 
 fi
 
-_tools=(s3cmd rclone )
+_tools=( s3cmd rclone )
+declare -A missing_tools=() 
 for t in "${_tools[@]}";do
     if ! command -v $t >/dev/null 2>&1; then
-        echo "NOTE: $t command was not found."
+        missing_tools[$t]=true
+        echo "WARNING: $t command was not found."
     fi
 done
 
+echo ""
+echo "WARNING: The --skip-validation was used, configurations will not be validated and could potentially be saved in a invalid state if user input is incorrect"
+echo ""
 
 echo "=========== PROMPTING USER INPUT ==========="
 
@@ -169,16 +182,20 @@ storage_service="lumi"
 export OS_PROJECT_NAME=$lumi_project_number
 
 
+echo ""
 echo "=========== CONFIGURING RCLONE ==========="
 local tmp_rclone_config=$(create_tmp_config $HOME/.config/rclone/rclone.conf )
 if [[ ! -z ${RCLONE_CONFIG+defined} ]];then
     OLD_RCLONE_CONFIG=$RCLONE_CONFIG 
 fi
-RCLONE_CONFIG=$tmp_rclone_config
+export RCLONE_CONFIG=$tmp_rclone_config
 
 #rclone parameters
-rclone config delete lumi-o-$lumi_project_number
-rclone config delete lumi-pub-$lumi_project_number
+# Allows creating configurations even if rclone is not there
+# rclone config delete lumi-o-$lumi_project_number
+# rclone config delete lumi-pub-$lumi_project_number
+delete_ini_section $tmp_rclone_config "lumi-o-$lumi_project_number"  
+delete_ini_section $tmp_rclone_config "lumi-pub-$lumi_project_number"
 mkdir -p  $HOME/.config/rclone/
 echo "" >> $tmp_rclone_config
 chmod go-rwx $tmp_rclone_config
@@ -203,7 +220,7 @@ echo "secret_access_key = $S3_SECRET_ACCESS_KEY" >> $tmp_rclone_config
 echo 'endpoint = https://lumidata.eu' >>  $tmp_rclone_config
 echo 'acl = public-read' >>  $tmp_rclone_config
 
-if output=$(rclone ls lumi-o-$lumi_project_number: 2>&1 ) ; then
+if output=$(rclone ls lumi-o-$lumi_project_number: 2>&1 ) || test "$skip_rclone_validation" == "true" ; then
    cp $tmp_rclone_config $HOME/.config/rclone/rclone.conf
    echo ""	
    echo "rclone remote lumi-o-$lumi_project_number: now provides an S3 based connection to Lumi-O storage area of project $lumi_project_number."
@@ -241,7 +258,7 @@ echo ""
 echo "=========== CONFIGURING S3CMD ==========="
 
 local tmp_s3cmd_config=$(create_tmp_config $HOME/.s3cfg)
-delete_s3_ini_section $tmp_s3cmd_config "lumi-${lumi_project_number}"
+delete_ini_section $tmp_s3cmd_config "lumi-${lumi_project_number}"
 
 echo '[lumi-'${lumi_project_number}']' > $tmp_s3cmd_config
 echo "access_key   = $S3_ACCESS_KEY_ID" >> $tmp_s3cmd_config
@@ -267,8 +284,9 @@ if [[ -n ${chunk_size} ]]; then
    echo "multipart_chunk_size_mb = $chunk_size"  >> $tmp_s3cmd_config
 fi
 
+
 # S3CMD_CONFIG
-if output=$(s3cmd -c $tmp_s3cmd_config ls s3: 2>&1 ) ; then
+if output=$(s3cmd -c $tmp_s3cmd_config ls s3: 2>&1 ) || test "$skip_s3cmd_validation" == "true"  ; then
     echo ""
     echo "Created s3cmd config for ${lumi_project_number}"
     echo -e "\tOther existing configurations can be accessed by adding the -c flag"
@@ -288,6 +306,8 @@ if output=$(s3cmd -c $tmp_s3cmd_config ls s3: 2>&1 ) ; then
     fi
 else
     echo "Failed to validate s3cmd config"
+    echo "The error was: $output"
+
 fi
 
 if [[ $debug == "true" ]];then 
@@ -319,13 +339,6 @@ echo "user=$OS_USERNAME" >>  $HOME/.lumio_default
 # unset variables unnecessary for token access or user/project info for the user
 # These need to be kept if you want to use openstack
 
-}
-
-function rclone() {
-  if [[ "$1" = 'info' ]]; then
-    echo 'Do not use rclone command "info"' >&2
-    else command rclone "$@"
-  fi
 }
 
 
