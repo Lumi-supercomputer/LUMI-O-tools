@@ -5,6 +5,12 @@ Currently just very lightly edited version of https://github.com/CSCfi/allas-cli
 
 Installations scripts are here just for testing purposes
 
+## Go version
+```
+go build -o lumio-conf
+```
+
+
 Install the standalone with:
 
 ```
