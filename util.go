@@ -14,6 +14,15 @@ import (
 	"gopkg.in/ini.v1"
 )
 
+func stringInSlice(a string, list []string) bool {
+	for _, b := range list {
+		if b == a {
+			return true
+		}
+	}
+	return false
+}
+
 func GetMaxOptionLength() int {
 	maxL := 0
 	flag.VisitAll(func(f *flag.Flag) {
@@ -57,9 +66,10 @@ options:
 	flag.VisitAll(flagF)
 }
 
-func updateConfig(config map[string]map[string]string, configFilePath string, carefull bool) {
-	os.Create(configFilePath)
-	os.Chmod(configFilePath, 0600)
+func updateConfig(config map[string]map[string]string, oldConfigFilePath string, newConfigFilePath string, carefull bool, singleSectionOnly bool) {
+	os.Create(newConfigFilePath)
+	os.Chmod(newConfigFilePath, 0600)
+	commitTempConfigFile(oldConfigFilePath, newConfigFilePath)
 	remoteConfig := ini.Empty()
 
 	for sectionName, m := range config {
@@ -70,18 +80,25 @@ func updateConfig(config map[string]map[string]string, configFilePath string, ca
 
 	// Do not delete remote config before setting new values.
 	if carefull {
-		updateIniSections(configFilePath, remoteConfig)
+		updateIniSections(newConfigFilePath, remoteConfig, singleSectionOnly)
 	} else {
-		setIniSections(configFilePath, remoteConfig)
+		setIniSections(newConfigFilePath, remoteConfig, singleSectionOnly)
 	}
 }
 
-func updateIniSections(filename string, data *ini.File) error {
-	return modifySections(filename, data, false)
+func updateIniSections(filename string, data *ini.File, singleSection bool) error {
+	return modifySections(filename, data, false, singleSection)
 }
-func modifySections(filename string, data *ini.File, setSection bool) error {
+func modifySections(filename string, data *ini.File, setSection bool, oneSectionOnly bool) error {
 	cfg := ini.Empty()
 	cfg.Append(filename)
+	if oneSectionOnly {
+		for _, sectionName := range cfg.SectionStrings() {
+			if !stringInSlice(sectionName, data.SectionStrings()) {
+				cfg.DeleteSection(sectionName)
+			}
+		}
+	}
 	for _, sectionName := range data.SectionStrings() {
 
 		if cfg.HasSection(sectionName) && setSection {
@@ -98,8 +115,8 @@ func modifySections(filename string, data *ini.File, setSection bool) error {
 	return err
 }
 
-func setIniSections(filename string, data *ini.File) error {
-	return modifySections(filename, data, true)
+func setIniSections(filename string, data *ini.File, singleSection bool) error {
+	return modifySections(filename, data, true, singleSection)
 }
 
 func PrintErr(err error, info string) {
