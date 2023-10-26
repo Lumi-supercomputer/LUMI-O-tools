@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -21,8 +22,8 @@ type Settings struct {
 	keepDefaultS3cmdConfig bool
 	rcloneConfig           string
 	s3cmdConfig            string
-	s3AccessKey            string
-	s3SecretKey            string
+	configuredTools        string
+	nonInteractive         bool
 }
 type AuthInfo struct {
 	s3AccessKey string
@@ -31,13 +32,30 @@ type AuthInfo struct {
 	chunksize   int
 }
 
-type validationFunc func(string, string) error
+func getGenericRemoteName(projid int) string {
+	if customRemoteName != "" {
+		return customRemoteName
+	} else {
+		return fmt.Sprintf("lumi-%d", projid)
 
-const systemDefaultRcloneConfig = "~/.config/rclone/rclone.conf"
-const systemDefaultS3cmdConfig = "~/.s3cfg"
-const carefullUpdate = false
-const namePrivateBase = "lumio"
-const namePublicBase = "lumio-pub"
+	}
+
+}
+
+func getPublicRcloneRemoteName(projid int) string {
+	if customRemoteName != "" {
+		return fmt.Sprintf("%s-public", customRemoteName)
+	} else {
+		return fmt.Sprintf("lumi-%d-public", projid)
+	}
+}
+func getPrivateRcloneRemoteName(projid int) string {
+	if customRemoteName != "" {
+		return customRemoteName
+	} else {
+		return fmt.Sprintf("lumi-%d-private", projid)
+	}
+}
 
 const skipValidationWarning = `WARNING: The --skip-validation was used, configurations will not be validated and could potentially be saved in an invalid state if user input is incorrect`
 
@@ -73,6 +91,7 @@ Next generate a new key or use existing valid key
 Open the Key details view and based on that give following information`
 
 var programName = filepath.Base(os.Args[0])
+var customRemoteName = ""
 
 func setupArgs(settings *Settings) {
 	flag.IntVar(&settings.chunksize, "chunksize", 15, `s3cmd chunk size, 5-5000, Files larger than SIZE, in MB, are automatically uploaded multithread-multipart (default: 15)`)
@@ -82,6 +101,9 @@ func setupArgs(settings *Settings) {
 	flag.IntVar(&settings.projectId, "project-number", -1, "Define LUMI-project to be used")
 	flag.StringVar(&settings.rcloneConfig, "rclone-config", systemDefaultRcloneConfig, "Path to rclone config")
 	flag.StringVar(&settings.s3cmdConfig, "s3cmd-config", systemDefaultS3cmdConfig, "Path to s3cmd config")
+	flag.StringVar(&settings.configuredTools, "configure-only")
+	flag.BoolVar(&settings.nonInteractive, "noninteractive", false, "Read access and secret keys from environment: LUMIO_S3_ACCESS,LUMIO_S3_SECRET")
+	flag.StringVar(&customRemoteName, "remote-name", "", "Custom name for the endpoints, rclone public remote name will include a -public suffix")
 }
 
 func parseCommandlineArguments(settings *Settings) error {
@@ -90,6 +112,18 @@ func parseCommandlineArguments(settings *Settings) error {
 	flag.Parse()
 	if settings.chunksize < 5 || settings.chunksize > 5000 {
 		return errors.New(fmt.Sprintf("--chunksize, Invalid Chunk size %d must be between 5 and 5000", settings.chunksize))
+	}
+	if settings.skipRcloneConfiguration && settings.skipS3cmdConfiguration {
+		return errors.New("Told to skip configuration for all known tools ( rclone and s3cmd ), nothing to do, exiting")
+	}
+	return nil
+}
+
+func validateProjId(id int) error {
+
+	if id < 462000000 || id > 466000000 {
+		invalidInputMsg := fmt.Sprintf("Invalid Lumi project number provided ( %d ), valid project numbers start with either 462 or 465 and contain 9 digits e.g 465000001", id)
+		return errors.New(invalidInputMsg)
 	}
 	return nil
 }
@@ -105,9 +139,9 @@ func getUserInput(a *AuthInfo, argProjId int) error {
 		a.projectId = argProjId
 	}
 	// Valid projects should either start with 462 or 465
-	if a.projectId < 462000000 || a.projectId > 466000000 {
-		invalidInputMsg := fmt.Sprintf("Invalid Lumi project number provided ( %d ), valid project numbers start with either 462 or 465 and contain 9 digits e.g 465000001", a.projectId)
-		return errors.New(invalidInputMsg)
+	err := validateProjId(a.projectId)
+	if err != nil {
+		return err
 	}
 
 	fmt.Print("Access key\n")
@@ -122,7 +156,12 @@ func getUserInput(a *AuthInfo, argProjId int) error {
 func ValidateRcloneRemote(rcloneConfigFilePath string, remoteName string) error {
 	os.Setenv("RCLONE_CONFIG", rcloneConfigFilePath)
 	command_args := fmt.Sprintf("%s:", remoteName)
-	return checkCommand("rclone", "ls", command_args)
+	return checkCommand("rclone", "lsd",
+		"--contimeout", "2s",
+		"--timeout", "2s",
+		"--low-level-retries", "1",
+		"--retries", "1",
+		command_args)
 }
 
 func ValidateS3cmdRemote(s3cmdConfigFilePath string, remoteName string) error {
@@ -131,7 +170,7 @@ func ValidateS3cmdRemote(s3cmdConfigFilePath string, remoteName string) error {
 
 func getS3cmdSetting(a AuthInfo) map[string]map[string]string {
 	s3cmdSettings := make(map[string]map[string]string)
-	s3cmdSettings[fmt.Sprintf("%s-%d", namePrivateBase, a.projectId)] = map[string]string{"access_key": a.s3AccessKey,
+	s3cmdSettings[getGenericRemoteName(a.projectId)] = map[string]string{"access_key": a.s3AccessKey,
 		"secret_key":           a.s3SecretKey,
 		"host_base":            "https://lumidata.eu",
 		"host_bucket":          "https://lumidata.eu",
@@ -170,7 +209,7 @@ func adds3cmdRemote(s3auth AuthInfo, s3cmdConfigPathNotExpanded string, tmpDir s
 
 	}
 	tmps3cmdConfig := fmt.Sprintf("%s/temp_s3cmd.config", tmpDir)
-	remoteName := fmt.Sprintf("%s-%d", namePrivateBase, s3auth.projectId)
+	remoteName := getGenericRemoteName(s3auth.projectId)
 	updateConfig(getS3cmdSetting(s3auth), tmps3cmdConfig, carefullUpdate)
 	info, err := ValidateRemote(tmps3cmdConfig, remoteName, "s3cmd", ValidateS3cmdRemote, printTempConfigInfo, skipValidation)
 	if err != nil {
@@ -202,8 +241,8 @@ func adds3cmdRemote(s3auth AuthInfo, s3cmdConfigPathNotExpanded string, tmpDir s
 
 func getRcloneSetting(a AuthInfo) map[string]map[string]string {
 	rcloneSettings := make(map[string]map[string]string)
-	privateRemoteName := fmt.Sprintf("%s-%d", namePrivateBase, a.projectId)
-	publicRemoteName := fmt.Sprintf("%s-%d", namePublicBase, a.projectId)
+	privateRemoteName := getPrivateRcloneRemoteName(a.projectId)
+	publicRemoteName := getPublicRcloneRemoteName(a.projectId)
 	sharedRemoteSettings := map[string]string{
 		"type":              "s3",
 		"provider":          "Ceph",
@@ -223,7 +262,7 @@ func addRcloneRemotes(s3auth AuthInfo, rcloneConfigPathNotExpanded string, tmpDi
 	tmpRcloneConfig := fmt.Sprintf("%s/temp_rclone.config", tmpDir)
 
 	updateConfig(getRcloneSetting(s3auth), tmpRcloneConfig, carefullUpdate)
-	remoteName := fmt.Sprintf("%s-%d", namePrivateBase, s3auth.projectId)
+	remoteName := getPrivateRcloneRemoteName(s3auth.projectId)
 	info, err := ValidateRemote(tmpRcloneConfig, remoteName, "rclone", ValidateRcloneRemote, printTempConfigInfo, skipValidation)
 	if err != nil {
 		return info, err
@@ -240,10 +279,45 @@ func addRcloneRemotes(s3auth AuthInfo, rcloneConfigPathNotExpanded string, tmpDi
 	return "", nil
 }
 
+func getNonInteractiveInput(a *AuthInfo, argProjId int) error {
+	projectIdEnvVal, projectIdEnvValIsPresent := os.LookupEnv("LUMIO_PROJECTID")
+	var err error
+	if argProjId != 0 {
+		a.projectId = argProjId
+	} else if projectIdEnvValIsPresent {
+		a.projectId, err = strconv.Atoi(projectIdEnvVal)
+		if err != nil {
+			return errors.New("Value for LUMIO_PROJECTID needs to be a number")
+
+		}
+	} else {
+		err := errors.New("--noninteractive flag used but, neither --project-number flag nor LUMIO_PROJECTID environment variable used")
+		return err
+	}
+	err = validateProjId(a.projectId)
+	if err != nil {
+		return err
+	}
+	s3AccessKeyEnvVal, s3AccessKeyIsPresent := os.LookupEnv("LUMIO_S3_ACCESS")
+	s3SecretKeyEnvVal, s3SecretKeyIsPresent := os.LookupEnv("LUMIO_S3_SECRET")
+
+	if s3AccessKeyIsPresent && s3SecretKeyIsPresent {
+		a.s3AccessKey = s3AccessKeyEnvVal
+		a.s3SecretKey = s3SecretKeyEnvVal
+
+	} else {
+		err := errors.New("Both LUMIO_S3_ACCESS and LUMIO_S3_SECRET need to be set when running in noninteractive mode ")
+		return err
+	}
+
+	return nil
+}
+
 func main() {
 
 	var programArgs Settings
 	var authInfo AuthInfo
+	var extraInfo string
 
 	toolList := get_tools([]string{"rclone", "s3cmd"})
 	syscall.Umask(0)
@@ -253,33 +327,51 @@ func main() {
 		PrintErr(err, "Invalid input for some commandline arguments")
 		os.Exit(1)
 	}
-	fmt.Printf("%s\n", authInstructions)
 	if programArgs.skipValidation {
 		fmt.Printf("\n%s\n", skipValidationWarning)
 	}
-	fmt.Print("\n=========== PROMPTING USER INPUT ===========\n")
-	err = getUserInput(&authInfo, programArgs.projectId)
-	if err != nil {
-		PrintErr(err, "Invalid user input")
-		os.Exit(1)
+	if programArgs.nonInteractive {
+		err = getNonInteractiveInput(&authInfo, authInfo.projectId)
+		if err != nil {
+			PrintErr(err, "Failed to start program noninteractively")
+			os.Exit(1)
+		}
+
+	} else {
+		fmt.Printf("%s\n", authInstructions)
+		fmt.Print("\n=========== PROMPTING USER INPUT ===========\n")
+		err = getUserInput(&authInfo, programArgs.projectId)
+		if err != nil {
+			PrintErr(err, "Invalid user input")
+			os.Exit(1)
+		}
 	}
 	authInfo.chunksize = programArgs.chunksize
 	tmpDir := createTmpDir("")
-	fmt.Printf("\n=========== CONFIGURING RCLONE ===========\n")
-	extraInfo, err := addRcloneRemotes(authInfo, programArgs.rcloneConfig, tmpDir, programArgs.skipValidation, programArgs.debug)
-	if err != nil {
-		if !toolList["rclone"] {
-			fmt.Print("WARNING: rclone command is missing (if rclone is a shell alias this script will not find it)\n")
+	if programArgs.skipRcloneConfiguration {
+		fmt.Printf("User gave --skip-rclone, will not configure for rclone")
+
+	} else {
+		fmt.Printf("\n=========== CONFIGURING RCLONE ===========\n")
+		extraInfo, err = addRcloneRemotes(authInfo, programArgs.rcloneConfig, tmpDir, programArgs.skipValidation, programArgs.debug)
+		if err != nil {
+			if !toolList["rclone"] {
+				fmt.Print("WARNING: rclone command is missing (if rclone is a shell alias this script will not find it)\n")
+			}
+			PrintErr(err, extraInfo)
 		}
-		PrintErr(err, extraInfo)
 	}
-	fmt.Printf("\n=========== CONFIGURING S3cmd ===========\n")
-	extraInfo, err = adds3cmdRemote(authInfo, programArgs.s3cmdConfig, tmpDir, programArgs.skipValidation, programArgs.debug, programArgs.keepDefaultS3cmdConfig)
-	if err != nil {
-		if !toolList["s3cmd"] {
-			fmt.Print("WARNING: s3cmd command is missing (if s3cmd is a shell alias this script will not find it)\n")
+	if programArgs.skipS3cmdConfiguration {
+		fmt.Printf("User gave --skip-s3cmd, will not configure for s3cmd")
+	} else {
+		fmt.Printf("\n=========== CONFIGURING S3cmd ===========\n")
+		extraInfo, err = adds3cmdRemote(authInfo, programArgs.s3cmdConfig, tmpDir, programArgs.skipValidation, programArgs.debug, programArgs.keepDefaultS3cmdConfig)
+		if err != nil {
+			if !toolList["s3cmd"] {
+				fmt.Print("WARNING: s3cmd command is missing (if s3cmd is a shell alias this script will not find it)\n")
+			}
+			PrintErr(err, extraInfo)
 		}
-		PrintErr(err, extraInfo)
 	}
 	if !programArgs.debug {
 		os.RemoveAll(tmpDir)
