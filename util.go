@@ -86,6 +86,26 @@ func updateConfig(config map[string]map[string]string, oldConfigFilePath string,
 	}
 }
 
+func deleteIniSectionsFromFile(filename string, sectionNames []string) error {
+	if _, err := os.Stat(filename); errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	cfg := ini.Empty()
+	cfg.Append(filename)
+	for _, name := range sectionNames {
+		if cfg.HasSection(name) {
+			cfg.DeleteSection(name)
+			fmt.Printf("Deleted section %s in file %s", name, filename)
+		} else {
+			fmt.Printf("WARNING: While deleting section %s in file %s, no such section\n", name, filename)
+		}
+
+	}
+	err := cfg.SaveTo(filename)
+	return err
+
+}
+
 func updateIniSections(filename string, data *ini.File, singleSection bool) error {
 	return modifySections(filename, data, false, singleSection)
 }

@@ -27,6 +27,7 @@ type Settings struct {
 	s3cmdConfig            string
 	configuredTools        string
 	nonInteractive         bool
+	deleteList             string
 }
 type AuthInfo struct {
 	s3AccessKey string
@@ -107,6 +108,12 @@ func setupArgs(settings *Settings) {
 	flag.StringVar(&settings.configuredTools, "configure-only", "", "Comma separated list of tools to configure for. Default is rclone,s3cmd")
 	flag.BoolVar(&settings.nonInteractive, "noninteractive", false, "Read access and secret keys from environment: LUMIO_S3_ACCESS,LUMIO_S3_SECRET")
 	flag.StringVar(&customRemoteName, "remote-name", "", "Custom name for the endpoints, rclone public remote name will include a -public suffix")
+	flag.StringVar(&settings.deleteList, "delete", "", "Comma separated list of endpoints to delete")
+}
+
+func constructDeleteList(a string) []string {
+	reg, _ := regexp.Compile(`\s+`)
+	return strings.Split(reg.ReplaceAllString(a, ""), ",")
 }
 
 func parseCommandlineArguments(settings *Settings) error {
@@ -397,6 +404,49 @@ func main() {
 	if err != nil {
 		PrintErr(err, "Invalid input for some commandline arguments")
 		os.Exit(1)
+	}
+
+	if programArgs.deleteList != "" {
+		sectionsToDelete := constructDeleteList(programArgs.deleteList)
+		fmt.Printf("Trying to delete the following sections: %s\n", strings.Join(sectionsToDelete, " "))
+		fmt.Printf("Do you want to continue (yes/no)\n")
+		var response string
+		if !programArgs.nonInteractive {
+			for {
+				_, err := fmt.Scanf("%s", &response)
+				if err != nil {
+					PrintErr(err, "Unknown error when reading input")
+					os.Exit(1)
+				}
+				if response == "no" {
+					fmt.Printf("User respondend with no, will not continue\n")
+					os.Exit(0)
+				} else if response == "yes" {
+					fmt.Printf("User responded with yes, continuing\n")
+					break
+				} else {
+					fmt.Printf("Enter either yes or no\n")
+				}
+			}
+		} else {
+			fmt.Printf("Using --nonintercative, assuming yes")
+		}
+		for _, tool := range tools {
+			if !tool.isEnabled {
+				if programArgs.debug {
+					fmt.Printf("Ignoring configuration for %s\n", tool.name)
+					continue
+				}
+			} else {
+				currentu, _ := user.Current()
+				config := strings.Replace(tool.configPath, "~", currentu.HomeDir, -1)
+				err = deleteIniSectionsFromFile(config, sectionsToDelete)
+				if err != nil {
+					PrintErr(err, "Failed while trying to delete ")
+				}
+			}
+		}
+		os.Exit(0)
 	}
 
 	if programArgs.nonInteractive {
