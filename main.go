@@ -75,9 +75,10 @@ IMPORTANT: When troubleshooting, DO NOT share the whole file
 ONLY the info related to the specific failed endpoint %s
 `
 
-const lumioS3serviceConfig = `[services lumio-s3]
+const lumioS3serviceConfig = `[services %s]
 s3           = 
- endpoint_url = https://lumidata.eu
+  endpoint_url = https://lumidata.eu
+  multipart_chunksize = %d
 `
 
 const passedRcloneRemoteValdidationMessage = `rclone remote %s: now provides an S3 based connection to Lumi-O storage area of project_%d
@@ -88,7 +89,7 @@ rclone remote %s: now provides an S3 based connection to Lumi-O storage area of 
 
 const passedAwsRemoteValdidationMessage = `Created aws credentials config profile %s for project_%d
 	use the specific project with the --profile flag
-	`
+`
 
 const passedS3cmdRemoteValidationMessage = `Created s3cmd config for project_%d
 	Other existing configurations can be accessed by adding the -c flag
@@ -371,23 +372,17 @@ func getAwsConfigFilePath(pathToCredFile string) string {
 	return filepath.Join(filepath.Dir(pathToCredFile), "config")
 }
 
-func appendDefaultAwsEndPoint(pathToCredFile string) error {
+func appendDefaultAwsEndPoint(pathToCredFile string, info AuthInfo, remoteName string) error {
 	configFilePath := getAwsConfigFilePath(pathToCredFile)
-	fmt.Printf("HERE %s\n", configFilePath)
-	cfg, err := ini.Load(configFilePath)
-	if err == nil {
-		if cfg.HasSection("services lumio-s3") {
-			return nil
-		}
-	}
-
+	sectionName := fmt.Sprintf("services %s", remoteName)
+	deleteAwsEntry(configFilePath, []string{sectionName})
 	f, err := os.OpenFile(configFilePath,
 		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	if _, err := f.WriteString(lumioS3serviceConfig); err != nil {
+	if _, err := f.WriteString(fmt.Sprintf(lumioS3serviceConfig, remoteName, info.chunksize)); err != nil {
 		return err
 	}
 	return nil
@@ -399,7 +394,7 @@ func getAwsSetting(a AuthInfo) map[string]map[string]string {
 	awsSettings[getGenericRemoteName(a.projectId)] = map[string]string{
 		"aws_access_key_id":     a.s3AccessKey,
 		"aws_secret_access_key": a.s3SecretKey,
-		"services":              "lumio-s3"}
+		"services":              getGenericRemoteName(a.projectId)}
 	return awsSettings
 }
 
@@ -414,7 +409,8 @@ func addAwsEndPoint(s3auth AuthInfo, tmpDir string, printTempConfigInfo bool, aw
 	}
 	updateConfig(newConfig, awsConfigPath, tmpAwsConfig, awsSettings.carefullUpdate, awsSettings.singleSection)
 	remoteName := getGenericRemoteName(s3auth.projectId)
-	appendDefaultAwsEndPoint(tmpAwsConfig)
+	commitTempConfigFile(getAwsConfigFilePath(awsConfigPath), getAwsConfigFilePath(tmpAwsConfig))
+	appendDefaultAwsEndPoint(tmpAwsConfig, s3auth, remoteName)
 	info, err := ValidateRemote(tmpAwsConfig, remoteName, "aws", ValidateAwsRemote, printTempConfigInfo, awsSettings.validationDisabled)
 	if err != nil {
 		return info, err
@@ -425,9 +421,9 @@ func addAwsEndPoint(s3auth AuthInfo, tmpDir string, printTempConfigInfo bool, aw
 
 		return fmt.Sprintf("While updating configuration, %s", inf), err
 	}
-	err = appendDefaultAwsEndPoint(awsConfigPath)
+	inf, err = commitTempConfigFile(getAwsConfigFilePath(tmpAwsConfig), getAwsConfigFilePath(awsConfigPath))
 	if err != nil {
-		return fmt.Sprintf("While setting default was endpoint"), err
+		return fmt.Sprintf("While setting default aws endpoint, %s", inf), err
 	}
 
 	fmt.Printf("Updated aws config %s\n\n", awsConfigPath)
@@ -507,6 +503,20 @@ func getNonInteractiveInput(a *AuthInfo, argProjId int) error {
 
 	return nil
 }
+func deleteAwsEntry(path string, sectionNames []string) {
+
+	replaceInFile(path, regexp.MustCompile(`(?m)^\s+`), "@")
+	cfg, err := ini.Load(path)
+	if err == nil {
+		for _, sectionName := range sectionNames {
+			if cfg.HasSection(sectionName) {
+				cfg.DeleteSection(sectionName)
+				cfg.SaveTo(path)
+			}
+		}
+	}
+	replaceInFile(path, regexp.MustCompile(`(?m)^@`), "  ")
+}
 
 func main() {
 
@@ -556,6 +566,16 @@ func main() {
 				currentu, _ := user.Current()
 				config := strings.Replace(tool.configPath, "~", currentu.HomeDir, -1)
 				err = deleteIniSectionsFromFile(config, sectionsToDelete)
+				// Extra logic for deleting configuration for aws
+				if tool.name == "aws" {
+
+					var toDel []string
+					for _, x := range sectionsToDelete {
+						toDel = append(toDel, strings.Join([]string{"services", x}, " "))
+					}
+
+					deleteAwsEntry(getAwsConfigFilePath(config), toDel)
+				}
 				if err != nil {
 					PrintErr(err, "Failed while trying to delete ")
 				}

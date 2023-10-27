@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"gopkg.in/ini.v1"
@@ -92,12 +93,26 @@ func deleteIniSectionsFromFile(filename string, sectionNames []string) error {
 	}
 	cfg := ini.Empty()
 	cfg.Append(filename)
+	var original_value = ""
+	if cfg.HasSection("default") {
+		df, _ := cfg.GetSection("default")
+		if df.HasKey("original_name") {
+			original_value = df.Key("original_name").String()
+		} else {
+			fmt.Print("WARNING: Found default section but could not guess the related section")
+		}
+	}
 	for _, name := range sectionNames {
 		if cfg.HasSection(name) {
 			cfg.DeleteSection(name)
 			fmt.Printf("Deleted section %s in file %s", name, filename)
 		} else {
 			fmt.Printf("WARNING: While deleting section %s in file %s, no such section\n", name, filename)
+		}
+		if original_value == name {
+			if cfg.HasSection("default") {
+				cfg.DeleteSection("default")
+			}
 		}
 
 	}
@@ -191,6 +206,19 @@ func checkCommand(command string, args ...string) error {
 		return nil
 	}
 
+}
+
+func replaceInFile(path string, pattern *regexp.Regexp, replacement string) {
+	read, err := os.ReadFile(path)
+	if err != nil {
+		panic(err)
+	}
+	newContents := pattern.ReplaceAllString(string(read), replacement)
+
+	err = os.WriteFile(path, []byte(newContents), 0)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func commitTempConfigFile(src string, dest string) (string, error) {
