@@ -18,16 +18,17 @@ import (
 )
 
 type Settings struct {
-	chunksize              int
-	debug                  bool
-	projectId              int
-	skipValidation         string
-	keepDefaultS3cmdConfig bool
-	rcloneConfig           string
-	s3cmdConfig            string
-	configuredTools        string
-	nonInteractive         bool
-	deleteList             string
+	chunksize       int
+	debug           bool
+	projectId       int
+	skipValidation  string
+	rcloneConfig    string
+	s3cmdConfig     string
+	awsCredentials  string
+	configuredTools string
+	nonInteractive  bool
+	deleteList      string
+	keepDefault     string
 }
 type AuthInfo struct {
 	s3AccessKey string
@@ -72,13 +73,22 @@ The error was:`
 const configSavedmsg = `Generated %s config has been saved to %s
 IMPORTANT: When troubleshooting, DO NOT share the whole file
 ONLY the info related to the specific failed endpoint %s
-
 `
+
+const lumioS3serviceConfig = `[services lumio-s3]
+s3           = 
+ endpoint_url = https://lumidata.eu
+`
+
 const passedRcloneRemoteValdidationMessage = `rclone remote %s: now provides an S3 based connection to Lumi-O storage area of project_%d
 
 rclone remote %s: now provides an S3 based connection to Lumi-O storage area of project_%d
 	Data pushed here is publicly available using the URL: https://%d.lumidata.eu/<bucket_name>/<object>"
 `
+
+const passedAwsRemoteValdidationMessage = `Created aws credentials config profile %s for project_%d
+	use the specific project with the --profile flag
+	`
 
 const passedS3cmdRemoteValidationMessage = `Created s3cmd config for project_%d
 	Other existing configurations can be accessed by adding the -c flag
@@ -101,10 +111,11 @@ func setupArgs(settings *Settings) {
 	flag.IntVar(&settings.chunksize, "chunksize", 15, `s3cmd chunk size, 5-5000, Files larger than SIZE, in MB, are automatically uploaded multithread-multipart (default: 15)`)
 	flag.BoolVar(&settings.debug, "debug", false, "Keep temporary configs for debugging")
 	flag.StringVar(&settings.skipValidation, "skip-validation", "", `Comma separated list of tools to skip validation for. WARNING: Might lead to a broken config`)
-	flag.BoolVar(&settings.keepDefaultS3cmdConfig, "keep-default-s3cmd-config", false, "Don't set the new configuration as default for s3cmd")
+	flag.StringVar(&settings.keepDefault, "keep-default", "", "Comma separated list of tools to not switch defaults for. Valid values: all,s3cmd,aws")
 	flag.IntVar(&settings.projectId, "project-number", 0, "Define LUMI-project to be used")
 	flag.StringVar(&settings.rcloneConfig, "rclone-config", systemDefaultRcloneConfig, "Path to rclone config")
 	flag.StringVar(&settings.s3cmdConfig, "s3cmd-config", systemDefaultS3cmdConfig, "Path to s3cmd config")
+	flag.StringVar(&settings.awsCredentials, "aws-config", systemDefaultAwsConfig, "Path to aws credentials file. Default entpoint configuration will be added ")
 	flag.StringVar(&settings.configuredTools, "configure-only", "", "Comma separated list of tools to configure for. Default is rclone,s3cmd")
 	flag.BoolVar(&settings.nonInteractive, "noninteractive", false, "Read access and secret keys from environment: LUMIO_S3_ACCESS,LUMIO_S3_SECRET")
 	flag.StringVar(&customRemoteName, "remote-name", "", "Custom name for the endpoints, rclone public remote name will include a -public suffix")
@@ -120,15 +131,13 @@ func parseCommandlineArguments(settings *Settings) error {
 	setupArgs(settings)
 	SetCustomHelp()
 	flag.Parse()
-	if settings.keepDefaultS3cmdConfig && settings.s3cmdConfig != systemDefaultS3cmdConfig {
-		fmt.Printf("WARNING: Using --keep-default-s3cmd-config together with --s3cmd-config has no effect\n")
-	}
 	if settings.chunksize < 5 || settings.chunksize > 5000 {
 		return errors.New(fmt.Sprintf("--chunksize, Invalid Chunk size %d must be between 5 and 5000", settings.chunksize))
 	}
 	reg, _ := regexp.Compile(`\s+`)
 	enabledTools := strings.Split(strings.ToLower(reg.ReplaceAllString(settings.configuredTools, "")), ",")
 	disabledValidation := strings.Split(strings.ToLower(reg.ReplaceAllString(settings.skipValidation, "")), ",")
+	keepDefaults := strings.Split(strings.ToLower(reg.ReplaceAllString(settings.keepDefault, "")), ",")
 	noValidation := stringInSlice("all", disabledValidation)
 	availableTools := [len(tools)]string{}
 	toolMap := make(map[string]*ToolSettings)
@@ -153,6 +162,19 @@ func parseCommandlineArguments(settings *Settings) error {
 			tools[i].isPresent = false
 		}
 
+	}
+	for _, et := range keepDefaults {
+		if et == "rclone" {
+			return errors.New("Specifying rclone for --keep-default does not make sense as rclone does not have a default remote")
+		}
+		if et == "all" || et == "" {
+			continue
+		}
+		if !stringInSlice(et, availableTools[:]) {
+			return errors.New(fmt.Sprintf("Unknow option %s for --keep-default flag. Valid options are: all s3cmd and aws", et))
+		} else {
+			toolMap[et].noReplace = true
+		}
 	}
 	for _, et := range enabledTools {
 		if et == "all" || et == "" {
@@ -179,8 +201,10 @@ func parseCommandlineArguments(settings *Settings) error {
 	}
 
 	toolMap["s3cmd"].configPath = settings.s3cmdConfig
-	toolMap["s3cmd"].noReplace = settings.keepDefaultS3cmdConfig
 	toolMap["rclone"].configPath = settings.rcloneConfig
+	if toolMap["s3cmd"].noReplace && settings.s3cmdConfig != systemDefaultS3cmdConfig {
+		fmt.Printf("WARNING: Using --keep-default s3cmd together with --s3cmd-config has no effect\n")
+	}
 
 	return nil
 }
@@ -241,6 +265,12 @@ func ValidateRcloneRemote(rcloneConfigFilePath string, remoteName string) error 
 
 func ValidateS3cmdRemote(s3cmdConfigFilePath string, remoteName string) error {
 	return checkCommand("s3cmd", "-c", s3cmdConfigFilePath, "ls", "s3:")
+}
+
+func ValidateAwsRemote(awsCredentialFilepath string, remoteName string) error {
+	os.Setenv("AWS_SHARED_CREDENTIALS_FILE", awsCredentialFilepath)
+	os.Setenv("AWS_CONFIG_FILE", getAwsConfigFilePath(awsCredentialFilepath))
+	return checkCommand("aws", "s3", "ls", "--profile", remoteName, "--cli-read-timeout", "2", "--cli-connect-timeout", "2")
 }
 
 func getS3cmdSetting(a AuthInfo) map[string]map[string]string {
@@ -335,6 +365,91 @@ func getRcloneSetting(a AuthInfo) map[string]map[string]string {
 	rcloneSettings[publicRemoteName] = MergeMaps(map[string]string{"acl": "public"}, sharedRemoteSettings)
 
 	return rcloneSettings
+}
+
+func getAwsConfigFilePath(pathToCredFile string) string {
+	return filepath.Join(filepath.Dir(pathToCredFile), "config")
+}
+
+func appendDefaultAwsEndPoint(pathToCredFile string) error {
+	configFilePath := getAwsConfigFilePath(pathToCredFile)
+	fmt.Printf("HERE %s\n", configFilePath)
+	cfg, err := ini.Load(configFilePath)
+	if err == nil {
+		if cfg.HasSection("services lumio-s3") {
+			return nil
+		}
+	}
+
+	f, err := os.OpenFile(configFilePath,
+		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if _, err := f.WriteString(lumioS3serviceConfig); err != nil {
+		return err
+	}
+	return nil
+}
+
+func getAwsSetting(a AuthInfo) map[string]map[string]string {
+	awsSettings := make(map[string]map[string]string)
+	// getGenericRemoteName(a.projectId)
+	awsSettings[getGenericRemoteName(a.projectId)] = map[string]string{
+		"aws_access_key_id":     a.s3AccessKey,
+		"aws_secret_access_key": a.s3SecretKey,
+		"services":              "lumio-s3"}
+	return awsSettings
+}
+
+func addAwsEndPoint(s3auth AuthInfo, tmpDir string, printTempConfigInfo bool, awsSettings ToolSettings) (string, error) {
+	currentu, _ := user.Current()
+	awsConfigPath := strings.Replace(awsSettings.configPath, "~", currentu.HomeDir, -1)
+	tmpAwsConfig := fmt.Sprintf("%s/temp_aws.config", tmpDir)
+	newConfig := getAwsSetting(s3auth)
+	if !awsSettings.noReplace {
+		newConfig["default"] = newConfig[getGenericRemoteName(s3auth.projectId)]
+		newConfig["default"]["original_name"] = getGenericRemoteName(s3auth.projectId)
+	}
+	updateConfig(newConfig, awsConfigPath, tmpAwsConfig, awsSettings.carefullUpdate, awsSettings.singleSection)
+	remoteName := getGenericRemoteName(s3auth.projectId)
+	appendDefaultAwsEndPoint(tmpAwsConfig)
+	info, err := ValidateRemote(tmpAwsConfig, remoteName, "aws", ValidateAwsRemote, printTempConfigInfo, awsSettings.validationDisabled)
+	if err != nil {
+		return info, err
+	}
+	inf, err := commitTempConfigFile(tmpAwsConfig, awsConfigPath)
+
+	if err != nil {
+
+		return fmt.Sprintf("While updating configuration, %s", inf), err
+	}
+	err = appendDefaultAwsEndPoint(awsConfigPath)
+	if err != nil {
+		return fmt.Sprintf("While setting default was endpoint"), err
+	}
+
+	fmt.Printf("Updated aws config %s\n\n", awsConfigPath)
+	if awsSettings.noReplace {
+		fmt.Printf("New config not set as default, use the --profile flag to select the generated config\n")
+		cfg, err := ini.Load(awsConfigPath)
+		default_config, err := cfg.GetSection("default")
+		if err == nil {
+			default_real_name, err := default_config.GetKey("original_name")
+			if err == nil {
+				fmt.Printf("\tCurrent default is %s\n", default_real_name)
+
+			} else {
+				fmt.Print("\tUnable to identify current default\n")
+			}
+		} else {
+			fmt.Printf("\tNo default config set")
+		}
+
+	}
+	fmt.Printf(passedAwsRemoteValdidationMessage, remoteName, s3auth.projectId)
+	return "", nil
 }
 
 func addRcloneRemotes(s3auth AuthInfo, tmpDir string, printTempConfigInfo bool, rcloneSettings ToolSettings) (string, error) {
@@ -450,7 +565,7 @@ func main() {
 	}
 
 	if programArgs.nonInteractive {
-		err = getNonInteractiveInput(&authInfo, authInfo.projectId)
+		err = getNonInteractiveInput(&authInfo, programArgs.projectId)
 		if err != nil {
 			PrintErr(err, "Failed to start program noninteractively")
 			os.Exit(1)

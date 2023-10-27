@@ -2,7 +2,7 @@ package main
 
 type validationFunc func(string, string) error
 
-var tools = [2]ToolSettings{rcloneSettings, s3cmdSettings}
+var tools = [3]ToolSettings{rcloneSettings, s3cmdSettings, awsSettings}
 
 const systemDefaultRcloneConfig = "~/.config/rclone/rclone.conf"
 const systemDefaultS3cmdConfig = "~/.s3cfg"
@@ -43,3 +43,15 @@ var s3cmdSettings = ToolSettings{
 	noReplace:          false,
 	carefullUpdate:     true,
 	singleSection:      true}
+
+var awsSettings = ToolSettings{
+	configPath:         systemDefaultAwsConfig,
+	addRemote:          addAwsEndPoint,
+	name:               "aws",
+	isEnabled:          false,
+	isPresent:          false,
+	validationDisabled: false,
+	noReplace:          false,
+	carefullUpdate:     true,
+	singleSection:      false,
+}
