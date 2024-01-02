@@ -29,12 +29,14 @@ type Settings struct {
 	nonInteractive  bool
 	deleteList      string
 	keepDefault     string
+	url             string
 }
 type AuthInfo struct {
 	s3AccessKey string
 	s3SecretKey string
 	projectId   int
 	chunksize   int
+	url         string
 }
 
 func getGenericRemoteName(projid int) string {
@@ -77,7 +79,7 @@ ONLY the info related to the specific failed endpoint %s
 
 const lumioS3serviceConfig = `[services %s]
 s3           = 
-  endpoint_url = https://lumidata.eu
+  endpoint_url = %s
   multipart_chunksize = %d
 `
 
@@ -116,11 +118,12 @@ func setupArgs(settings *Settings) {
 	flag.IntVar(&settings.projectId, "project-number", 0, "Define LUMI-project to be used")
 	flag.StringVar(&settings.rcloneConfig, "rclone-config", systemDefaultRcloneConfig, "Path to rclone config")
 	flag.StringVar(&settings.s3cmdConfig, "s3cmd-config", systemDefaultS3cmdConfig, "Path to s3cmd config")
-	flag.StringVar(&settings.awsCredentials, "aws-config", systemDefaultAwsConfig, "Path to aws credentials file. Default entpoint configuration will be added ")
+	flag.StringVar(&settings.awsCredentials, "aws-config", systemDefaultAwsConfig, "Path to aws credentials file. Default endpoint configuration will be added ")
 	flag.StringVar(&settings.configuredTools, "configure-only", "", "Comma separated list of tools to configure for. Default is rclone,s3cmd")
 	flag.BoolVar(&settings.nonInteractive, "noninteractive", false, "Read access and secret keys from environment: LUMIO_S3_ACCESS,LUMIO_S3_SECRET")
 	flag.StringVar(&customRemoteName, "remote-name", "", "Custom name for the endpoints, rclone public remote name will include a -public suffix")
 	flag.StringVar(&settings.deleteList, "delete", "", "Comma separated list of endpoints to delete")
+	flag.StringVar(&settings.url, "url", systemDefaultS3Url, "Url for the s3 object storage")
 }
 
 func constructDeleteList(a string) []string {
@@ -143,12 +146,16 @@ func parseCommandlineArguments(settings *Settings) error {
 	availableTools := [len(tools)]string{}
 	toolMap := make(map[string]*ToolSettings)
 	allEnabled := stringInSlice("all", enabledTools)
+	allKeep := stringInSlice("all", keepDefaults)
 
 	for i := range tools {
 		availableTools[i] = tools[i].name
 		toolMap[tools[i].name] = &tools[i]
 		if settings.configuredTools != "" {
 			tools[i].isEnabled = false
+		}
+		if allKeep {
+			tools[i].noReplace = true
 		}
 		if allEnabled {
 			tools[i].isEnabled = true
@@ -210,8 +217,13 @@ func parseCommandlineArguments(settings *Settings) error {
 	return nil
 }
 
+// We don't actually need to validate the projectid
 func validateProjId(id int) error {
 
+	_, skipProjectIdValidation := os.LookupEnv("LUMIO_SKIP_PROJID")
+	if skipProjectIdValidation {
+		return nil
+	}
 	if id < 462000000 || id > 466000000 {
 		invalidInputMsg := fmt.Sprintf("Invalid Lumi project number provided ( %d ), valid project numbers start with either 462 or 465 and contain 9 digits e.g 465000001", id)
 		return errors.New(invalidInputMsg)
@@ -222,7 +234,10 @@ func validateProjId(id int) error {
 func getUserInput(a *AuthInfo, argProjId int) error {
 	if argProjId == 0 {
 		fmt.Print("Lumi project number\n")
-		i, err := fmt.Scanf("%d", &a.projectId)
+		var inputVal string
+		var err error
+		i, _ := fmt.Scanf("%s", &inputVal)
+		a.projectId, err = strconv.Atoi(inputVal)
 		if err != nil || i == 0 {
 			return errors.New("Failed to read Lumi project number, make sure there are only numbers in the input")
 		}
@@ -278,9 +293,10 @@ func getS3cmdSetting(a AuthInfo) map[string]map[string]string {
 	s3cmdSettings := make(map[string]map[string]string)
 	s3cmdSettings[getGenericRemoteName(a.projectId)] = map[string]string{"access_key": a.s3AccessKey,
 		"secret_key":           a.s3SecretKey,
-		"host_base":            "https://lumidata.eu",
-		"host_bucket":          "https://lumidata.eu",
+		"host_base":            a.url,
+		"host_bucket":          a.url,
 		"human_readable_sizes": "True",
+		"project_id":           fmt.Sprintf("%d", a.projectId),
 		"enable_multipart":     "True",
 		"signature_v2":         "True",
 		"use_https":            "True",
@@ -359,9 +375,10 @@ func getRcloneSetting(a AuthInfo) map[string]map[string]string {
 		"type":              "s3",
 		"provider":          "Ceph",
 		"env_auth":          "false",
+		"project_id":        fmt.Sprintf("%d", a.projectId),
 		"access_key_id":     a.s3AccessKey,
 		"secret_access_key": a.s3SecretKey,
-		"endpoint":          "https://lumidata.eu"}
+		"endpoint":          a.url}
 	rcloneSettings[privateRemoteName] = MergeMaps(map[string]string{"acl": "private"}, sharedRemoteSettings)
 	rcloneSettings[publicRemoteName] = MergeMaps(map[string]string{"acl": "public"}, sharedRemoteSettings)
 
@@ -382,7 +399,7 @@ func appendDefaultAwsEndPoint(pathToCredFile string, info AuthInfo, remoteName s
 		return err
 	}
 	defer f.Close()
-	if _, err := f.WriteString(fmt.Sprintf(lumioS3serviceConfig, remoteName, info.chunksize)); err != nil {
+	if _, err := f.WriteString(fmt.Sprintf(lumioS3serviceConfig, remoteName, info.url, info.chunksize)); err != nil {
 		return err
 	}
 	return nil
@@ -394,7 +411,8 @@ func getAwsSetting(a AuthInfo) map[string]map[string]string {
 	awsSettings[getGenericRemoteName(a.projectId)] = map[string]string{
 		"aws_access_key_id":     a.s3AccessKey,
 		"aws_secret_access_key": a.s3SecretKey,
-		"services":              getGenericRemoteName(a.projectId)}
+		"services":              getGenericRemoteName(a.projectId),
+		"project_id":            fmt.Sprintf("%d", a.projectId)}
 	return awsSettings
 }
 
@@ -523,6 +541,7 @@ func main() {
 	var programArgs Settings
 	var authInfo AuthInfo
 	var extraInfo string
+
 	syscall.Umask(0)
 
 	err := parseCommandlineArguments(&programArgs)
@@ -530,6 +549,7 @@ func main() {
 		PrintErr(err, "Invalid input for some commandline arguments")
 		os.Exit(1)
 	}
+	authInfo.url = programArgs.url
 
 	if programArgs.deleteList != "" {
 		sectionsToDelete := constructDeleteList(programArgs.deleteList)

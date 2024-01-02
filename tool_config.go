@@ -7,6 +7,7 @@ var tools = [3]ToolSettings{rcloneSettings, s3cmdSettings, awsSettings}
 const systemDefaultRcloneConfig = "~/.config/rclone/rclone.conf"
 const systemDefaultS3cmdConfig = "~/.s3cfg"
 const systemDefaultAwsConfig = "~/.aws/credentials"
+const systemDefaultS3Url = "https://lumidata.eu"
 
 type remoteNameFunc func(int) string
 type addRemote func(s3auth AuthInfo, tmpDir string, debug bool, toolsettings ToolSettings) (string, error)
