@@ -105,7 +105,7 @@ func deleteIniSectionsFromFile(filename string, sectionNames []string) error {
 	for _, name := range sectionNames {
 		if cfg.HasSection(name) {
 			cfg.DeleteSection(name)
-			fmt.Printf("Deleted section %s in file %s", name, filename)
+			fmt.Printf("Deleted section %s in file %s\n", name, filename)
 		} else {
 			fmt.Printf("WARNING: While deleting section %s in file %s, no such section\n", name, filename)
 		}
@@ -155,6 +155,7 @@ func setIniSections(filename string, data *ini.File, singleSection bool) error {
 }
 
 func PrintErr(err error, info string) {
+	var programName = filepath.Base(os.Args[0])
 	message := "%s: %s\n"
 	if err != nil {
 		message = "%s: %s\n\t%s\n"
