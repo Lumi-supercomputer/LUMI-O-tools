@@ -1,7 +1,8 @@
-package main
+package toolConfig
 
 import (
 	"fmt"
+	"lumioconf/util"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -20,9 +21,8 @@ s3           =
   multipart_chunksize = %d
 `
 
-func deleteAwsEntry(path string, sectionNames []string) {
-
-	replaceInFile(path, regexp.MustCompile(`(?m)^\s+`), "@")
+func deleteAwsEntry(path string, sectionNames []string) error {
+	util.ReplaceInFile(path, regexp.MustCompile(`(?m)^\s+`), "@")
 	cfg, err := ini.Load(path)
 	if err == nil {
 		for _, sectionName := range sectionNames {
@@ -31,13 +31,16 @@ func deleteAwsEntry(path string, sectionNames []string) {
 				cfg.SaveTo(path)
 			}
 		}
+	} else {
+		return err
 	}
-	replaceInFile(path, regexp.MustCompile(`(?m)^@`), "  ")
+	util.ReplaceInFile(path, regexp.MustCompile(`(?m)^@`), "  ")
+	return nil
 }
 func ValidateAwsRemote(awsCredentialFilepath string, remoteName string) error {
 	os.Setenv("AWS_SHARED_CREDENTIALS_FILE", awsCredentialFilepath)
 	os.Setenv("AWS_CONFIG_FILE", getAwsConfigFilePath(awsCredentialFilepath))
-	return checkCommand("aws", "s3", "ls", "--profile", remoteName, "--cli-read-timeout", "2", "--cli-connect-timeout", "2")
+	return util.CheckCommand("aws", "s3", "ls", "--profile", remoteName, "--cli-read-timeout", "2", "--cli-connect-timeout", "2")
 }
 
 func getAwsConfigFilePath(pathToCredFile string) string {
@@ -54,7 +57,7 @@ func appendDefaultAwsEndPoint(pathToCredFile string, info AuthInfo, remoteName s
 		return err
 	}
 	defer f.Close()
-	if _, err := f.WriteString(fmt.Sprintf(lumioS3serviceConfig, remoteName, info.url, info.chunksize)); err != nil {
+	if _, err := f.WriteString(fmt.Sprintf(lumioS3serviceConfig, remoteName, info.Url, info.Chunksize)); err != nil {
 		return err
 	}
 	return nil
@@ -63,38 +66,38 @@ func appendDefaultAwsEndPoint(pathToCredFile string, info AuthInfo, remoteName s
 func getAwsSetting(a AuthInfo) map[string]map[string]string {
 	awsSettings := make(map[string]map[string]string)
 	// getGenericRemoteName(a.projectId)
-	awsSettings[getGenericRemoteName(a.projectId)] = map[string]string{
+	awsSettings[getGenericRemoteName(a.ProjectId)] = map[string]string{
 		"aws_access_key_id":     a.s3AccessKey,
 		"aws_secret_access_key": a.s3SecretKey,
-		"services":              getGenericRemoteName(a.projectId),
-		"project_id":            fmt.Sprintf("%d", a.projectId)}
+		"services":              getGenericRemoteName(a.ProjectId),
+		"project_id":            fmt.Sprintf("%d", a.ProjectId)}
 	return awsSettings
 }
 
-func addAwsEndPoint(s3auth AuthInfo, tmpDir string, printTempConfigInfo bool, awsSettings ToolSettings) (string, error) {
+func addAwsEndPoint(s3auth AuthInfo, tmpDir string, awsSettings ToolSettings) (string, error) {
 	currentu, _ := user.Current()
 	awsConfigPath := strings.Replace(awsSettings.configPath, "~", currentu.HomeDir, -1)
 	tmpAwsConfig := fmt.Sprintf("%s/temp_aws.config", tmpDir)
 	newConfig := getAwsSetting(s3auth)
 	if !awsSettings.noReplace {
-		newConfig["default"] = newConfig[getGenericRemoteName(s3auth.projectId)]
-		newConfig["default"]["original_name"] = getGenericRemoteName(s3auth.projectId)
+		newConfig["default"] = newConfig[getGenericRemoteName(s3auth.ProjectId)]
+		newConfig["default"]["original_name"] = getGenericRemoteName(s3auth.ProjectId)
 	}
-	updateConfig(newConfig, awsConfigPath, tmpAwsConfig, awsSettings.carefullUpdate, awsSettings.singleSection)
-	remoteName := getGenericRemoteName(s3auth.projectId)
-	commitTempConfigFile(getAwsConfigFilePath(awsConfigPath), getAwsConfigFilePath(tmpAwsConfig))
+	util.UpdateConfig(newConfig, awsConfigPath, tmpAwsConfig, awsSettings.carefullUpdate, awsSettings.singleSection)
+	remoteName := getGenericRemoteName(s3auth.ProjectId)
+	util.CommitTempConfigFile(getAwsConfigFilePath(awsConfigPath), getAwsConfigFilePath(tmpAwsConfig))
 	appendDefaultAwsEndPoint(tmpAwsConfig, s3auth, remoteName)
-	info, err := ValidateRemote(tmpAwsConfig, remoteName, "aws", ValidateAwsRemote, printTempConfigInfo, awsSettings.validationDisabled)
+	info, err := ValidateRemote(tmpAwsConfig, remoteName, "aws", ValidateAwsRemote, awsSettings.ValidationDisabled)
 	if err != nil {
 		return info, err
 	}
-	inf, err := commitTempConfigFile(tmpAwsConfig, awsConfigPath)
+	inf, err := util.CommitTempConfigFile(tmpAwsConfig, awsConfigPath)
 
 	if err != nil {
 
 		return fmt.Sprintf("While updating configuration, %s", inf), err
 	}
-	inf, err = commitTempConfigFile(getAwsConfigFilePath(tmpAwsConfig), getAwsConfigFilePath(awsConfigPath))
+	inf, err = util.CommitTempConfigFile(getAwsConfigFilePath(tmpAwsConfig), getAwsConfigFilePath(awsConfigPath))
 	if err != nil {
 		return fmt.Sprintf("While setting default aws endpoint, %s", inf), err
 	}
@@ -117,6 +120,6 @@ func addAwsEndPoint(s3auth AuthInfo, tmpDir string, printTempConfigInfo bool, aw
 		}
 
 	}
-	fmt.Printf(passedAwsRemoteValdidationMessage, remoteName, s3auth.projectId)
+	fmt.Printf(passedAwsRemoteValdidationMessage, remoteName, s3auth.ProjectId)
 	return "", nil
 }

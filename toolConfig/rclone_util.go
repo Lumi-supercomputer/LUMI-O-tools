@@ -1,7 +1,8 @@
-package main
+package toolConfig
 
 import (
 	"fmt"
+	"lumioconf/util"
 	"os"
 	"os/user"
 	"strings"
@@ -31,7 +32,7 @@ func getPrivateRcloneRemoteName(projid int) string {
 func ValidateRcloneRemote(rcloneConfigFilePath string, remoteName string) error {
 	os.Setenv("RCLONE_CONFIG", rcloneConfigFilePath)
 	command_args := fmt.Sprintf("%s:", remoteName)
-	return checkCommand("rclone", "lsd",
+	return util.CheckCommand("rclone", "lsd",
 		"--contimeout", "2s",
 		"--timeout", "2s",
 		"--low-level-retries", "1",
@@ -39,17 +40,17 @@ func ValidateRcloneRemote(rcloneConfigFilePath string, remoteName string) error 
 		command_args)
 }
 
-func addRcloneRemotes(s3auth AuthInfo, tmpDir string, printTempConfigInfo bool, rcloneSettings ToolSettings) (string, error) {
+func addRcloneRemotes(s3auth AuthInfo, tmpDir string, rcloneSettings ToolSettings) (string, error) {
 	currentu, _ := user.Current()
 	rcloneConfigPath := strings.Replace(rcloneSettings.configPath, "~", currentu.HomeDir, -1)
 	tmpRcloneConfig := fmt.Sprintf("%s/temp_rclone.config", tmpDir)
-	updateConfig(getRcloneSetting(s3auth), rcloneConfigPath, tmpRcloneConfig, rcloneSettings.carefullUpdate, rcloneSettings.singleSection)
-	remoteName := getPrivateRcloneRemoteName(s3auth.projectId)
-	info, err := ValidateRemote(tmpRcloneConfig, remoteName, "rclone", ValidateRcloneRemote, printTempConfigInfo, rcloneSettings.validationDisabled)
+	util.UpdateConfig(getRcloneSetting(s3auth), rcloneConfigPath, tmpRcloneConfig, rcloneSettings.carefullUpdate, rcloneSettings.singleSection)
+	remoteName := getPrivateRcloneRemoteName(s3auth.ProjectId)
+	info, err := ValidateRemote(tmpRcloneConfig, remoteName, "rclone", ValidateRcloneRemote, rcloneSettings.ValidationDisabled)
 	if err != nil {
 		return info, err
 	}
-	inf, err := commitTempConfigFile(tmpRcloneConfig, rcloneConfigPath)
+	inf, err := util.CommitTempConfigFile(tmpRcloneConfig, rcloneConfigPath)
 
 	if err != nil {
 
@@ -57,24 +58,24 @@ func addRcloneRemotes(s3auth AuthInfo, tmpDir string, printTempConfigInfo bool, 
 	}
 
 	fmt.Printf("Updated rclone config %s\n\n", rcloneConfigPath)
-	fmt.Printf(passedRcloneRemoteValdidationMessage, remoteName, s3auth.projectId, getPublicRcloneRemoteName(s3auth.projectId), s3auth.projectId, s3auth.projectId)
+	fmt.Printf(passedRcloneRemoteValdidationMessage, remoteName, s3auth.ProjectId, getPublicRcloneRemoteName(s3auth.ProjectId), s3auth.ProjectId, s3auth.ProjectId)
 	return "", nil
 }
 
 func getRcloneSetting(a AuthInfo) map[string]map[string]string {
 	rcloneSettings := make(map[string]map[string]string)
-	privateRemoteName := getPrivateRcloneRemoteName(a.projectId)
-	publicRemoteName := getPublicRcloneRemoteName(a.projectId)
+	privateRemoteName := getPrivateRcloneRemoteName(a.ProjectId)
+	publicRemoteName := getPublicRcloneRemoteName(a.ProjectId)
 	sharedRemoteSettings := map[string]string{
 		"type":              "s3",
 		"provider":          "Ceph",
 		"env_auth":          "false",
-		"project_id":        fmt.Sprintf("%d", a.projectId),
+		"project_id":        fmt.Sprintf("%d", a.ProjectId),
 		"access_key_id":     a.s3AccessKey,
 		"secret_access_key": a.s3SecretKey,
-		"endpoint":          a.url}
-	rcloneSettings[privateRemoteName] = MergeMaps(map[string]string{"acl": "private"}, sharedRemoteSettings)
-	rcloneSettings[publicRemoteName] = MergeMaps(map[string]string{"acl": "public"}, sharedRemoteSettings)
+		"endpoint":          a.Url}
+	rcloneSettings[privateRemoteName] = util.MergeMaps(map[string]string{"acl": "private"}, sharedRemoteSettings)
+	rcloneSettings[publicRemoteName] = util.MergeMaps(map[string]string{"acl": "public"}, sharedRemoteSettings)
 
 	return rcloneSettings
 }

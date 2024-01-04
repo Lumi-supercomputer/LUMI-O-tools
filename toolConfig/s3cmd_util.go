@@ -1,8 +1,9 @@
-package main
+package toolConfig
 
 import (
 	"errors"
 	"fmt"
+	"lumioconf/util"
 	"os"
 	"os/user"
 	"strings"
@@ -21,35 +22,35 @@ Or use the -c flag on the commandline to use the generated config
 `
 
 func ValidateS3cmdRemote(s3cmdConfigFilePath string, remoteName string) error {
-	return checkCommand("s3cmd", "-c", s3cmdConfigFilePath, "ls", "s3:")
+	return util.CheckCommand("s3cmd", "-c", s3cmdConfigFilePath, "ls", "s3:")
 }
 
 func getS3cmdSetting(a AuthInfo) map[string]map[string]string {
 	s3cmdSettings := make(map[string]map[string]string)
-	s3cmdSettings[getGenericRemoteName(a.projectId)] = map[string]string{"access_key": a.s3AccessKey,
+	s3cmdSettings[getGenericRemoteName(a.ProjectId)] = map[string]string{"access_key": a.s3AccessKey,
 		"secret_key":           a.s3SecretKey,
-		"host_base":            a.url,
-		"host_bucket":          a.url,
+		"host_base":            a.Url,
+		"host_bucket":          a.Url,
 		"human_readable_sizes": "True",
-		"project_id":           fmt.Sprintf("%d", a.projectId),
+		"project_id":           fmt.Sprintf("%d", a.ProjectId),
 		"enable_multipart":     "True",
 		"signature_v2":         "True",
 		"use_https":            "True",
-		"chunk_size":           fmt.Sprintf("%d", a.chunksize)}
+		"chunk_size":           fmt.Sprintf("%d", a.Chunksize)}
 	return s3cmdSettings
 
 }
 
-func adds3cmdRemote(s3auth AuthInfo, tmpDir string, printTempConfigInfo bool, s3cmdSettings ToolSettings) (string, error) {
+func adds3cmdRemote(s3auth AuthInfo, tmpDir string, s3cmdSettings ToolSettings) (string, error) {
 
 	currentu, _ := user.Current()
 	s3cmdBaseConfigPath := fmt.Sprintf("%s", strings.Replace(s3cmdSettings.configPath, "~", currentu.HomeDir, -1))
-	nonDefaultConfigPathSet := s3cmdSettings.configPath != systemDefaultS3cmdConfig
+	nonDefaultConfigPathSet := s3cmdSettings.configPath != systemDefaultConfigPaths["s3cmd"]
 	s3cmdConfigPath := s3cmdBaseConfigPath
 	tmps3cmdConfig := fmt.Sprintf("%s/temp_s3cmd.config", tmpDir)
-	remoteName := getGenericRemoteName(s3auth.projectId)
-	updateConfig(getS3cmdSetting(s3auth), s3cmdConfigPath, tmps3cmdConfig, s3cmdSettings.carefullUpdate, s3cmdSettings.singleSection)
-	info, err := ValidateRemote(tmps3cmdConfig, remoteName, "s3cmd", ValidateS3cmdRemote, printTempConfigInfo, s3cmdSettings.validationDisabled)
+	remoteName := getGenericRemoteName(s3auth.ProjectId)
+	util.UpdateConfig(getS3cmdSetting(s3auth), s3cmdConfigPath, tmps3cmdConfig, s3cmdSettings.carefullUpdate, s3cmdSettings.singleSection)
+	info, err := ValidateRemote(tmps3cmdConfig, remoteName, "s3cmd", ValidateS3cmdRemote, s3cmdSettings.ValidationDisabled)
 	if err != nil {
 		return info, err
 	}
@@ -61,10 +62,10 @@ func adds3cmdRemote(s3auth AuthInfo, tmpDir string, printTempConfigInfo bool, s3
 	}
 
 	if !nonDefaultConfigPathSet && s3cmdSettings.noReplace {
-		s3cmdConfigPath = fmt.Sprintf("%s-%s", s3cmdBaseConfigPath, getGenericRemoteName(s3auth.projectId))
+		s3cmdConfigPath = fmt.Sprintf("%s-%s", s3cmdBaseConfigPath, getGenericRemoteName(s3auth.ProjectId))
 	}
 
-	inf, err := commitTempConfigFile(tmps3cmdConfig, s3cmdConfigPath)
+	inf, err := util.CommitTempConfigFile(tmps3cmdConfig, s3cmdConfigPath)
 	if err != nil {
 
 		return fmt.Sprintf("While updating configuration, %s", inf), err

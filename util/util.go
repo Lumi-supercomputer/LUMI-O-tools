@@ -1,4 +1,5 @@
-package main
+// Generic utility functions
+package util
 
 import (
 	"errors"
@@ -15,7 +16,17 @@ import (
 	"gopkg.in/ini.v1"
 )
 
-func stringInSlice(a string, list []string) bool {
+// Global flag for descided if we should print debug info
+// Set when parsing commandline arguments
+var GlobalDebugFlag = false
+
+func PrintVerb(msg string) {
+	if GlobalDebugFlag {
+		fmt.Print(msg)
+	}
+}
+
+func StringInSlice(a string, list []string) bool {
 	for _, b := range list {
 		if b == a {
 			return true
@@ -32,19 +43,6 @@ func GetMaxOptionLength() int {
 		}
 	})
 	return maxL
-}
-
-func get_tools(tools []string) map[string]bool {
-	toolRes := make(map[string]bool)
-	for _, tool := range tools {
-		_, err := exec.LookPath(tool)
-		if err != nil {
-			toolRes[tool] = false
-		} else {
-			toolRes[tool] = true
-		}
-	}
-	return toolRes
 }
 
 func SetCustomHelp() {
@@ -67,10 +65,10 @@ options:
 	flag.VisitAll(flagF)
 }
 
-func updateConfig(config map[string]map[string]string, oldConfigFilePath string, newConfigFilePath string, carefull bool, singleSectionOnly bool) {
+func UpdateConfig(config map[string]map[string]string, oldConfigFilePath string, newConfigFilePath string, carefull bool, singleSectionOnly bool) {
 	os.Create(newConfigFilePath)
 	os.Chmod(newConfigFilePath, 0600)
-	commitTempConfigFile(oldConfigFilePath, newConfigFilePath)
+	CommitTempConfigFile(oldConfigFilePath, newConfigFilePath)
 	remoteConfig := ini.Empty()
 
 	for sectionName, m := range config {
@@ -86,8 +84,12 @@ func updateConfig(config map[string]map[string]string, oldConfigFilePath string,
 		setIniSections(newConfigFilePath, remoteConfig, singleSectionOnly)
 	}
 }
+func RemoveWhiteSpaceAndSplit(a string) []string {
+	reg, _ := regexp.Compile(`\s+`)
+	return strings.Split(reg.ReplaceAllString(a, ""), ",")
+}
 
-func deleteIniSectionsFromFile(filename string, sectionNames []string) error {
+func DeleteIniSectionsFromFile(filename string, sectionNames []string) error {
 	if _, err := os.Stat(filename); errors.Is(err, os.ErrNotExist) {
 		return err
 	}
@@ -99,7 +101,7 @@ func deleteIniSectionsFromFile(filename string, sectionNames []string) error {
 		if df.HasKey("original_name") {
 			original_value = df.Key("original_name").String()
 		} else {
-			fmt.Print("WARNING: Found default section but could not guess the related section")
+			fmt.Print("WARNING: Found default section but could not guess the related section\n")
 		}
 	}
 	for _, name := range sectionNames {
@@ -112,6 +114,7 @@ func deleteIniSectionsFromFile(filename string, sectionNames []string) error {
 		if original_value == name {
 			if cfg.HasSection("default") {
 				cfg.DeleteSection("default")
+				fmt.Print("WARNING: Also deleted default section\n")
 			}
 		}
 
@@ -129,7 +132,7 @@ func modifySections(filename string, data *ini.File, setSection bool, oneSection
 	cfg.Append(filename)
 	if oneSectionOnly {
 		for _, sectionName := range cfg.SectionStrings() {
-			if !stringInSlice(sectionName, data.SectionStrings()) {
+			if !StringInSlice(sectionName, data.SectionStrings()) {
 				cfg.DeleteSection(sectionName)
 			}
 		}
@@ -167,7 +170,7 @@ func PrintErr(err error, info string) {
 
 var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
-func RandStringRunes(n int) string {
+func randStringRunes(n int) string {
 	b := make([]rune, n)
 	for i := range b {
 		b[i] = letterRunes[rand.Intn(len(letterRunes))]
@@ -175,7 +178,7 @@ func RandStringRunes(n int) string {
 	return string(b)
 }
 
-func createTmpDir(path string) string {
+func CreateTmpDir(path string) string {
 	usern, _ := user.Current()
 
 	tmpdirPath := ""
@@ -185,15 +188,15 @@ func createTmpDir(path string) string {
 		tmpVal = os.Getenv("TMPDIR")
 	}
 	if tmpVal != "" {
-		tmpdirPath = fmt.Sprintf("%s/%s/lumio-temp-%s", tmpVal, usern.Username, RandStringRunes(10))
+		tmpdirPath = fmt.Sprintf("%s/%s/lumio-temp-%s", tmpVal, usern.Username, randStringRunes(10))
 	} else {
-		tmpdirPath = fmt.Sprintf("/tmp/%s/lumio-temp-%s", usern.Username, RandStringRunes(10))
+		tmpdirPath = fmt.Sprintf("/tmp/%s/lumio-temp-%s", usern.Username, randStringRunes(10))
 	}
 	os.MkdirAll(tmpdirPath, 0700)
 	return tmpdirPath
 }
 
-func checkCommand(command string, args ...string) error {
+func CheckCommand(command string, args ...string) error {
 	// Captures both stderr and stdout
 	ret, err := exec.Command(command, args...).CombinedOutput()
 	if err != nil {
@@ -209,7 +212,7 @@ func checkCommand(command string, args ...string) error {
 
 }
 
-func replaceInFile(path string, pattern *regexp.Regexp, replacement string) {
+func ReplaceInFile(path string, pattern *regexp.Regexp, replacement string) {
 	read, err := os.ReadFile(path)
 	if err != nil {
 		panic(err)
@@ -222,7 +225,7 @@ func replaceInFile(path string, pattern *regexp.Regexp, replacement string) {
 	}
 }
 
-func commitTempConfigFile(src string, dest string) (string, error) {
+func CommitTempConfigFile(src string, dest string) (string, error) {
 	_, err := os.Stat(dest)
 	if err != nil {
 		err = os.MkdirAll(filepath.Dir(dest), 0700)

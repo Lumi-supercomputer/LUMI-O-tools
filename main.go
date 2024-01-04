@@ -2,30 +2,37 @@ package main
 
 import (
 	"fmt"
+	"lumioconf/toolConfig"
+
+	"lumioconf/util"
 	"os"
 	"strings"
 	"syscall"
 )
 
 func main() {
+	var toolMap = map[string]*toolConfig.ToolSettings{
+		"rclone": &toolConfig.RcloneSettings,
+		"s3cdm":  &toolConfig.S3cmdSettings,
+		"aws":    &toolConfig.AwsSettings}
 
-	var programArgs Settings
-	var authInfo AuthInfo
+	var programArgs toolConfig.Settings
+	var authInfo toolConfig.AuthInfo
 	var extraInfo string
 
 	syscall.Umask(0)
 
-	err := parseCommandlineArguments(&programArgs)
+	err := toolConfig.ParseCommandlineArguments(&programArgs, toolMap)
 	if err != nil {
-		PrintErr(err, "Invalid input for some commandline arguments")
+		util.PrintErr(err, "Invalid input for some commandline arguments")
 		os.Exit(1)
 	}
-	authInfo.url = programArgs.url
+	authInfo.Url = programArgs.Url
 
-	if programArgs.deleteList != "" {
-		err = deleteConfigSection(programArgs)
+	if programArgs.DeleteList != "" {
+		err = toolConfig.DeleteConfigSection(programArgs, toolMap)
 		if err != nil {
-			PrintErr(err, "Failed while trying to delete endpoints")
+			util.PrintErr(err, "Failed while trying to delete endpoints")
 			os.Exit(1)
 		} else {
 
@@ -33,45 +40,45 @@ func main() {
 		}
 	}
 
-	if programArgs.nonInteractive {
-		err = getNonInteractiveInput(&authInfo, programArgs.projectId)
+	if programArgs.NonInteractive {
+		err = toolConfig.GetNonInteractiveInput(&authInfo, programArgs.ProjectId)
 		if err != nil {
-			PrintErr(err, "Failed to start program noninteractively")
+			util.PrintErr(err, "Failed to start program noninteractively")
 			os.Exit(1)
 		}
 
 	} else {
-		fmt.Printf("%s\n", authInstructions)
+		fmt.Printf("%s\n", toolConfig.AuthInstructions)
 		fmt.Print("\n=========== PROMPTING USER INPUT ===========\n")
-		err = getUserInput(&authInfo, programArgs.projectId)
+		err = toolConfig.GetUserInput(&authInfo, programArgs.ProjectId)
 		if err != nil {
-			PrintErr(err, "Invalid user input")
+			util.PrintErr(err, "Invalid user input")
 			os.Exit(1)
 		}
 	}
-	authInfo.chunksize = programArgs.chunksize
-	tmpDir := createTmpDir("")
+	authInfo.Chunksize = programArgs.Chunksize
+	tmpDir := util.CreateTmpDir("")
 
-	for _, tool := range tools {
-		if !tool.isEnabled {
-			if programArgs.debug {
-				fmt.Printf("Skipping configuration for %s\n", tool.name)
+	for _, tool := range toolMap {
+		if !tool.IsEnabled {
+			if util.GlobalDebugFlag {
+				fmt.Printf("Skipping configuration for %s\n", tool.Name)
 			}
 		} else {
-			fmt.Printf("\n=========== CONFIGURING %s ===========\n", strings.ToUpper(tool.name))
-			if tool.validationDisabled {
-				fmt.Printf("%s\n\n", skipValidationWarning)
+			fmt.Printf("\n=========== CONFIGURING %s ===========\n", strings.ToUpper(tool.Name))
+			if tool.ValidationDisabled {
+				fmt.Printf("%s\n\n", toolConfig.SkipValidationWarning)
 			}
-			extraInfo, err = tool.addRemote(authInfo, tmpDir, programArgs.debug, tool)
+			extraInfo, err = tool.AddRemote(authInfo, tmpDir, *tool)
 			if err != nil {
-				if !tool.isPresent {
-					fmt.Printf("WARNING: %s command missing (if %s is a shell alias this script will not find it)\n", tool.name, tool.name)
+				if !tool.IsPresent {
+					fmt.Printf("WARNING: %s command missing (if %s is a shell alias this script will not find it)\n", tool.Name, tool.Name)
 				}
-				PrintErr(err, extraInfo)
+				util.PrintErr(err, extraInfo)
 			}
 		}
 	}
-	if !programArgs.debug {
+	if !util.GlobalDebugFlag {
 		os.RemoveAll(tmpDir)
 	}
 }
