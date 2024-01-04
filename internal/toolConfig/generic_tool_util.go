@@ -113,7 +113,7 @@ func parseConfigPathMapping(confArg string) (map[string]string, error) {
 	for _, mapping := range stringMap {
 		m := strings.Split(mapping, ":")
 		if len(m) != 2 {
-			newErr := errors.New(fmt.Sprintf("Incorrect format for argument to --config-path. Is %s", confArg))
+			newErr := errors.New(fmt.Sprintf("Incorrect format for argument to --config-path. Is %s, should be tool1:path1,tool2:path2", confArg))
 			return nil, newErr
 		} else {
 			mappings[m[0]] = m[1]
@@ -201,7 +201,7 @@ func checkIfPresent(toolMap map[string]*ToolSettings) {
 		if err != nil {
 			toolMap[k].IsPresent = false
 		} else {
-			toolMap[k].IsPresent = false
+			toolMap[k].IsPresent = true
 		}
 
 	}
@@ -228,7 +228,10 @@ func disableValidationForSelectedTools(toolNamesToDisableS string, available []s
 
 func setConfigPaths(pathM string, available []string, toolMap map[string]*ToolSettings) error {
 
-	configPaths, _ := parseConfigPathMapping(pathM)
+	configPaths, err := parseConfigPathMapping(pathM)
+	if err != nil {
+		return err
+	}
 
 	for k, v := range configPaths {
 		if !util.StringInSlice(k, available[:]) {
