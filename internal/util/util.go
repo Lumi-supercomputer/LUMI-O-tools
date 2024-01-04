@@ -20,6 +20,28 @@ import (
 // Set when parsing commandline arguments
 var GlobalDebugFlag = false
 
+// These build info values are filled during compilation See the makefile
+var (
+	progVersion = ""
+	gitHash     = ""
+	buildTime   = ""
+)
+
+func PrintVersion() {
+	var programName = filepath.Base(os.Args[0])
+	time := "(No build time information)"
+	hash := "(No commit info)"
+
+	version := progVersion
+	if buildTime != "" {
+		time = buildTime
+	}
+	if gitHash != "" {
+		hash = gitHash
+	}
+	fmt.Printf("%s %s\n\tcommit: %s\n\tbuild time: %s\n", programName, version, hash, time)
+}
+
 func PrintVerb(msg string) {
 	if GlobalDebugFlag {
 		fmt.Print(msg)

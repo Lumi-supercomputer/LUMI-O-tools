@@ -2,7 +2,7 @@ package toolConfig
 
 import (
 	"fmt"
-	"lumioconf/util"
+	"lumioconf/internal/util"
 	"os"
 	"os/user"
 	"strings"

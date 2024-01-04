@@ -4,7 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"lumioconf/util"
+	"lumioconf/internal/util"
 	"os"
 	"os/exec"
 	"os/user"
@@ -138,8 +138,13 @@ func ParseCommandlineArguments(settings *Settings, toolMap map[string]*ToolSetti
 	flag.StringVar(&customRemoteName, "remote-name", "", "Custom name for the endpoints, rclone public remote name will include a -public suffix")
 	flag.StringVar(&settings.DeleteList, "delete", "", "Comma separated list of endpoints to delete")
 	flag.StringVar(&settings.Url, "url", systemDefaultS3Url, "Url for the s3 object storage")
+	flag.BoolVar(&settings.ShowVersion, "version", false, "Show version information and exit")
 	util.SetCustomHelp()
 	flag.Parse()
+	// Exit early if --version was given
+	if settings.ShowVersion {
+		return nil
+	}
 	validateChunksize(settings)
 
 	availableTools := make([]string, len(toolMap))
@@ -167,7 +172,6 @@ func ParseCommandlineArguments(settings *Settings, toolMap map[string]*ToolSetti
 	if err != nil {
 		return err
 	}
-
 	if toolMap["s3cmd"].noReplace && toolMap["s3cmd"].configPath != systemDefaultConfigPaths["s3cmd"] {
 		fmt.Printf("WARNING: Using --keep-default s3cmd together with --s3cmd-config has no effect\n")
 	}
@@ -275,13 +279,20 @@ func disableValidationForSelectedTools(toolNamesToDisableS string, available []s
 // We don't actually need to validate the projectid
 // But keep it here to force the user to check what project they are generating
 // access for and to see what project an endpoint was configured for without going to the webpage.
+// Additionally we can also print the correct public url for rclone objects.
+// This is just a sanity check as we cannot check if the whole number is correct
+// Just the first digits and the number of digits
+// 462 465 442
 func validateProjId(id int) error {
 
-	_, skipProjectIdValidation := os.LookupEnv("LUMIO_SKIP_PROJID")
+	_, skipProjectIdValidation := os.LookupEnv("LUMIO_SKIP_PROJID_CHECK")
 	if skipProjectIdValidation {
 		return nil
 	}
-	if id < 462000000 || id > 466000000 {
+	projIdLen := 9 // 465000001
+	idAsString := fmt.Sprintf("%d", id)
+	idStartAsString := idAsString[0:3]
+	if (idStartAsString == "462" || idStartAsString == "465" || idStartAsString == "442") || projIdLen != len(idAsString) {
 		invalidInputMsg := fmt.Sprintf("Invalid Lumi project number provided ( %d ), valid project numbers start with either 462 or 465 and contain 9 digits e.g 465000001", id)
 		return errors.New(invalidInputMsg)
 	}

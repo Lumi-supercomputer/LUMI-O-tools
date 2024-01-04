@@ -14,4 +14,3 @@ curl -X PUT -T "${file}" \
   -H "Content-Type: ${contentType}" \
   -H "Authorization: AWS ${s3Key}:${signature}" \
     https://lumidata.eu/${bucket}/${file}
-

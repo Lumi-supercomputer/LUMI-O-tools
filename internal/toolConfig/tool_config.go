@@ -36,6 +36,7 @@ type Settings struct {
 	NonInteractive bool
 	DeleteList     string
 	Url            string
+	ShowVersion    bool
 }
 type AuthInfo struct {
 	s3AccessKey string
