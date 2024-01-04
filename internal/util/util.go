@@ -52,7 +52,9 @@ func PrintVerb(msg string) {
 		fmt.Print(msg)
 	}
 }
-func RemoveStringFromSlice(s []string, r string) []string {
+func RemoveStringFromSlice(o []string, r string) []string {
+	s := make([]string, len(o))
+	copy(s, o)
 	for i, v := range s {
 		if v == r {
 			return append(s[:i], s[i+1:]...)

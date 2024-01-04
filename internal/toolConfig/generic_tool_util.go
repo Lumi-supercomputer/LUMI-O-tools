@@ -138,9 +138,9 @@ func ParseCommandlineArguments(settings *Settings, toolMap map[string]*ToolSetti
 	flag.StringVar(&configPathMapping, "config-path", "", "Comma separated list of config paths for the tools. E.g rclone:/path/to/config,s3cmd:/path/to/config2")
 	flag.StringVar(&skipValidation, "skip-validation", "", `Comma separated list of tools to skip validation for. WARNING: Might lead to a broken config`)
 	flag.StringVar(&keepDefault, "keep-default", "", "Comma separated list of tools to not switch defaults for. Valid values: all,s3cmd,aws")
-	flag.StringVar(&configuredTools, "configure-only", "", "Comma separated list of tools to configure for. Default is rclone,s3cmd")
-	flag.IntVar(&settings.Chunksize, "chunksize", 15, `s3cmd chunk size, 5-5000, Files larger than SIZE, in MB, are automatically uploaded multithread-multipart (default: 15)`)
-	flag.BoolVar(&util.GlobalDebugFlag, "debug", false, "Keep temporary configs for debugging and display more output")
+	flag.StringVar(&configuredTools, "configure-only", "", "Comma separated list of tools to create configurations for. Default is rclone and s3cmd")
+	flag.IntVar(&settings.Chunksize, "chunksize", 15, `s3cmd and aws cli chunk size, 5-5000, Files larger than SIZE, in MB, are automatically uploaded multithread-multipart (default: 15)`)
+	flag.BoolVar(&util.GlobalDebugFlag, "debug", false, "Keep temporary configs for debugging and display additional output")
 	flag.IntVar(&settings.ProjectId, "project-number", 0, "Define LUMI-project to be used")
 	flag.BoolVar(&settings.NonInteractive, "noninteractive", false, "Read access and secret keys from environment: LUMIO_S3_ACCESS,LUMIO_S3_SECRET")
 	flag.StringVar(&customRemoteName, "remote-name", "", "Custom name for the endpoints, rclone public remote name will include a -public suffix")
@@ -172,7 +172,7 @@ func ParseCommandlineArguments(settings *Settings, toolMap map[string]*ToolSetti
 		return err
 	}
 	if strings.Contains(keepDefault, "rclone") {
-		fmt.Printf("WARNING: Specifying rclone for --keep-default does not make sense as rclone does not have a default remote")
+		return errors.New("Specifying rclone for --keep-default does not make sense as rclone does not have a default remote\n")
 	}
 
 	err = setKeepDefault(keepDefault, util.RemoveStringFromSlice(availableTools, "rclone"), toolMap)

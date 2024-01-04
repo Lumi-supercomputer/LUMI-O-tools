@@ -13,7 +13,7 @@ const SkipValidationWarning = `WARNING: The --skip-validation flag was used, con
 
 const failedRemoteValidationMsg = `Failed to validate new %s endpoint %s
 No new endpoint was added
-Double check that the correct details were enter
+Double check that the correct details were entered
 Run with --debug to keep the generated temporary configuration
 The error was:`
 
