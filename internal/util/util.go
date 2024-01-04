@@ -25,21 +25,26 @@ var (
 	progVersion = ""
 	gitHash     = ""
 	buildTime   = ""
+	isDirty     = ""
 )
 
 func PrintVersion() {
 	var programName = filepath.Base(os.Args[0])
 	time := "(No build time information)"
 	hash := "(No commit info)"
+	dirty := ""
 
 	version := progVersion
+	if isDirty != "" {
+		dirty = fmt.Sprintf(" %s", "(dirty)")
+	}
 	if buildTime != "" {
 		time = buildTime
 	}
 	if gitHash != "" {
 		hash = gitHash
 	}
-	fmt.Printf("%s %s\n\tcommit: %s\n\tbuild time: %s\n", programName, version, hash, time)
+	fmt.Printf("%s %s\n\tcommit: %s%s\n\tbuild time: %s\n", programName, version, hash, dirty, time)
 }
 
 func PrintVerb(msg string) {
@@ -47,7 +52,14 @@ func PrintVerb(msg string) {
 		fmt.Print(msg)
 	}
 }
-
+func RemoveStringFromSlice(s []string, r string) []string {
+	for i, v := range s {
+		if v == r {
+			return append(s[:i], s[i+1:]...)
+		}
+	}
+	return s
+}
 func StringInSlice(a string, list []string) bool {
 	for _, b := range list {
 		if b == a {
@@ -245,6 +257,11 @@ func ReplaceInFile(path string, pattern *regexp.Regexp, replacement string) {
 	if err != nil {
 		panic(err)
 	}
+}
+func CheckFileExists(filePath string) bool {
+	_, error := os.Stat(filePath)
+	//return !os.IsNotExist(err)
+	return !errors.Is(error, os.ErrNotExist)
 }
 
 func CommitTempConfigFile(src string, dest string) (string, error) {

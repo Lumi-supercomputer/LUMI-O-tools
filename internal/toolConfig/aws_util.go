@@ -13,7 +13,7 @@ import (
 )
 
 const passedAwsRemoteValdidationMessage = `Created aws credentials config profile %s for project_%d
-	use the specific project with the --profile flag
+	use a specific profile with the --profile flag
 `
 const lumioS3serviceConfig = `[services %s]
 s3           = 
@@ -27,6 +27,7 @@ func deleteAwsEntry(path string, sectionNames []string) error {
 	if err == nil {
 		for _, sectionName := range sectionNames {
 			if cfg.HasSection(sectionName) {
+				fmt.Printf("Deleting profile configuration for %s in %s\n", sectionName, path)
 				cfg.DeleteSection(sectionName)
 				cfg.SaveTo(path)
 			}
@@ -79,7 +80,7 @@ func addAwsEndPoint(s3auth AuthInfo, tmpDir string, awsSettings ToolSettings) (s
 	awsConfigPath := strings.Replace(awsSettings.configPath, "~", currentu.HomeDir, -1)
 	tmpAwsConfig := fmt.Sprintf("%s/temp_aws.config", tmpDir)
 	newConfig := getAwsSetting(s3auth)
-	if !awsSettings.noReplace {
+	if !awsSettings.NoReplace {
 		newConfig["default"] = newConfig[getGenericRemoteName(s3auth.ProjectId)]
 		newConfig["default"]["original_name"] = getGenericRemoteName(s3auth.ProjectId)
 	}
@@ -103,8 +104,8 @@ func addAwsEndPoint(s3auth AuthInfo, tmpDir string, awsSettings ToolSettings) (s
 	}
 
 	fmt.Printf("Updated aws config %s\n\n", awsConfigPath)
-	if awsSettings.noReplace {
-		fmt.Printf("New config not set as default, use the --profile flag to select the generated config\n")
+	if awsSettings.NoReplace {
+		fmt.Printf("New profile not set as default, use the --profile flag to use the generated config\n")
 		cfg, err := ini.Load(awsConfigPath)
 		default_config, err := cfg.GetSection("default")
 		if err == nil {
@@ -119,6 +120,8 @@ func addAwsEndPoint(s3auth AuthInfo, tmpDir string, awsSettings ToolSettings) (s
 			fmt.Printf("\tNo default config set")
 		}
 
+	} else {
+		fmt.Printf("New profile set as default\n")
 	}
 	fmt.Printf(passedAwsRemoteValdidationMessage, remoteName, s3auth.ProjectId)
 	return "", nil

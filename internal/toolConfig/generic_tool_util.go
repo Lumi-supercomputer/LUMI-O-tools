@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
+	"reflect"
 	"strconv"
 	"strings"
 	"syscall"
@@ -54,7 +55,7 @@ func DeleteConfigSection(programArgs Settings, toolMap map[string]*ToolSettings)
 			}
 		}
 	} else {
-		fmt.Printf("Using --nonintercative, assuming yes")
+		fmt.Printf("Using --nonintercative, assuming yes\n")
 	}
 	for _, tool := range toolMap {
 		if !tool.IsEnabled {
@@ -75,9 +76,16 @@ func DeleteConfigSection(programArgs Settings, toolMap map[string]*ToolSettings)
 				}
 
 				err = deleteAwsEntry(getAwsConfigFilePath(config), toDel)
+				if err != nil {
+					return err
+				}
 			}
-			if err != nil {
-				return err
+			if tool.Name == "s3cmd" {
+				err = deleteExtraS3cmdConfig(tool.configPath, sectionsToDelete)
+				if err != nil {
+					return err
+				}
+
 			}
 		}
 	}
@@ -145,7 +153,6 @@ func ParseCommandlineArguments(settings *Settings, toolMap map[string]*ToolSetti
 	if settings.ShowVersion {
 		return nil
 	}
-	validateChunksize(settings)
 
 	availableTools := make([]string, len(toolMap))
 	i := 0
@@ -164,7 +171,11 @@ func ParseCommandlineArguments(settings *Settings, toolMap map[string]*ToolSetti
 	if err != nil {
 		return err
 	}
-	err = setKeepDefault(keepDefault, availableTools, toolMap)
+	if strings.Contains(keepDefault, "rclone") {
+		fmt.Printf("WARNING: Specifying rclone for --keep-default does not make sense as rclone does not have a default remote")
+	}
+
+	err = setKeepDefault(keepDefault, util.RemoveStringFromSlice(availableTools, "rclone"), toolMap)
 	if err != nil {
 		return err
 	}
@@ -172,8 +183,13 @@ func ParseCommandlineArguments(settings *Settings, toolMap map[string]*ToolSetti
 	if err != nil {
 		return err
 	}
-	if toolMap["s3cmd"].noReplace && toolMap["s3cmd"].configPath != systemDefaultConfigPaths["s3cmd"] {
+	if toolMap["s3cmd"].NoReplace && toolMap["s3cmd"].configPath != systemDefaultConfigPaths["s3cmd"] {
 		fmt.Printf("WARNING: Using --keep-default s3cmd together with --s3cmd-config has no effect\n")
+	}
+
+	// Chuncksize option is not used for rlcone so don't verify unless needed.
+	if toolMap["s3cmd"].IsEnabled || toolMap["aws"].IsEnabled {
+		validateChunksize(settings)
 	}
 
 	return nil
@@ -191,24 +207,23 @@ func checkIfPresent(toolMap map[string]*ToolSettings) {
 	}
 }
 
-func setEnabledTools(toEnableS string, available []string, toolMap map[string]*ToolSettings) error {
-	toEnable := util.RemoveWhiteSpaceAndSplit(toEnableS)
-	for _, et := range toEnable {
-		if et == "" {
-			continue
-		}
-		if et == "all" {
-			for _, t := range available {
-				toolMap[t].IsEnabled = true
-			}
-		}
-		if !util.StringInSlice(et, available[:]) {
-			return errors.New(fmt.Sprintf("Unknow option %s for --configure-only flag. Valid options are: all s3cmd aws and rclone", et))
-		} else {
-			toolMap[et].IsEnabled = true
+// A non-empty input means we have to make sure
+// No tool will default to being active
+func setEnabledTools(toEnable string, available []string, toolMap map[string]*ToolSettings) error {
+	if toEnable != "" {
+		for _, v := range toolMap {
+			v.IsEnabled = false
 		}
 	}
-	return nil
+	return genericSetter(toEnable, available, "IsEnabled", "--configure-only", toolMap)
+}
+
+func setKeepDefault(toolNamesToKeepDefaultsS string, available []string, toolMap map[string]*ToolSettings) error {
+	return genericSetter(toolNamesToKeepDefaultsS, available, "NoReplace", "--keep-default", toolMap)
+}
+
+func disableValidationForSelectedTools(toolNamesToDisableS string, available []string, toolMap map[string]*ToolSettings) error {
+	return genericSetter(toolNamesToDisableS, available, "ValidationDisabled", "--skip-validation", toolMap)
 }
 
 func setConfigPaths(pathM string, available []string, toolMap map[string]*ToolSettings) error {
@@ -226,53 +241,27 @@ func setConfigPaths(pathM string, available []string, toolMap map[string]*ToolSe
 	return nil
 }
 
-func setKeepDefault(toolNamesToKeepDefaultsS string, available []string, toolMap map[string]*ToolSettings) error {
-	toolNamesToKeepDefaults := util.RemoveWhiteSpaceAndSplit(toolNamesToKeepDefaultsS)
-	for _, et := range toolNamesToKeepDefaults {
-		if et == "rclone" {
-			return errors.New("Specifying rclone for --keep-default does not make sense as rclone does not have a default remote")
-		}
-		if et == "" {
-			continue
-		}
+func genericSetter(argString string, toolNames []string, propertyName string, optionName string, toolMap map[string]*ToolSettings) error {
+	if argString == "" {
+		return nil
+	}
+	l := util.RemoveWhiteSpaceAndSplit(argString)
+
+	for _, et := range l {
 		if et == "all" {
-			for _, t := range available {
-				toolMap[t].noReplace = true
+			for _, t := range toolNames {
+				reflect.ValueOf(toolMap[t]).Elem().FieldByName(propertyName).SetBool(true)
 			}
 			return nil
 		}
-		if !util.StringInSlice(et, available[:]) {
-			return errors.New(fmt.Sprintf("Unknow option %s for --keep-default flag. Valid options are: all s3cmd and aws", et))
-		} else {
-			toolMap[et].noReplace = true
-		}
-	}
-
-	return nil
-}
-
-func disableValidationForSelectedTools(toolNamesToDisableS string, available []string, toolMap map[string]*ToolSettings) error {
-	toolNamesToDisable := util.RemoveWhiteSpaceAndSplit(toolNamesToDisableS)
-	for _, v := range toolNamesToDisable {
-		if v == "" {
-			continue
-		}
-		if v == "all" {
-			for _, t := range available {
-				toolMap[t].ValidationDisabled = true
-			}
-			return nil
-		}
-
-		if !util.StringInSlice(v, available[:]) {
-			return errors.New(fmt.Sprintf("Unknown option %s for --skip-validation flag. Valid options are: all %s", v, strings.Join(available[:], " ")))
+		if !util.StringInSlice(et, toolNames) {
+			return errors.New(fmt.Sprintf("Unknow option %s for %s flag. Valid options are: all %s", et, optionName, strings.Join(toolNames[:], " ")))
 
 		} else {
-			toolMap[v].ValidationDisabled = true
+			reflect.ValueOf(toolMap[et]).Elem().FieldByName(propertyName).SetBool(true)
+
 		}
-
 	}
-
 	return nil
 }
 
@@ -285,14 +274,20 @@ func disableValidationForSelectedTools(toolNamesToDisableS string, available []s
 // 462 465 442
 func validateProjId(id int) error {
 
+	var idStartAsString string
 	_, skipProjectIdValidation := os.LookupEnv("LUMIO_SKIP_PROJID_CHECK")
 	if skipProjectIdValidation {
 		return nil
 	}
 	projIdLen := 9 // 465000001
 	idAsString := fmt.Sprintf("%d", id)
-	idStartAsString := idAsString[0:3]
-	if (idStartAsString == "462" || idStartAsString == "465" || idStartAsString == "442") || projIdLen != len(idAsString) {
+	if len(idAsString) > 2 {
+		idStartAsString = idAsString[0:3]
+	} else {
+		idStartAsString = idAsString
+	}
+	if !(idStartAsString == "462" || idStartAsString == "465" || idStartAsString == "442") || projIdLen != len(idAsString) {
+		util.PrintVerb(fmt.Sprintf("Projectid starts with %s and is %d digits\n", idStartAsString, len(idAsString)))
 		invalidInputMsg := fmt.Sprintf("Invalid Lumi project number provided ( %d ), valid project numbers start with either 462 or 465 and contain 9 digits e.g 465000001", id)
 		return errors.New(invalidInputMsg)
 	}

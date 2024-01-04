@@ -52,7 +52,7 @@ type ToolSettings struct {
 	IsEnabled          bool
 	IsPresent          bool
 	ValidationDisabled bool
-	noReplace          bool
+	NoReplace          bool
 	carefullUpdate     bool
 	singleSection      bool
 }
@@ -64,7 +64,7 @@ var RcloneSettings = ToolSettings{
 	IsEnabled:          true,
 	IsPresent:          false,
 	ValidationDisabled: false,
-	noReplace:          false,
+	NoReplace:          false,
 	carefullUpdate:     true,
 	singleSection:      false}
 var S3cmdSettings = ToolSettings{
@@ -74,7 +74,7 @@ var S3cmdSettings = ToolSettings{
 	IsEnabled:          true,
 	IsPresent:          false,
 	ValidationDisabled: false,
-	noReplace:          false,
+	NoReplace:          false,
 	carefullUpdate:     true,
 	singleSection:      true}
 
@@ -85,7 +85,7 @@ var AwsSettings = ToolSettings{
 	IsEnabled:          false,
 	IsPresent:          false,
 	ValidationDisabled: false,
-	noReplace:          false,
+	NoReplace:          false,
 	carefullUpdate:     true,
 	singleSection:      false,
 }

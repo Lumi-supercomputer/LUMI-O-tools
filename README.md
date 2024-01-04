@@ -36,7 +36,19 @@ at `https://<Lumi project number>.lumidata.eu/<bucket_name>/<object>`
 
 ## Additional examples
 
-`lumio-conf` does not create any configuration for these tools,
+Boto3 uses the same config as the `aws` command.
+
+### Boto3
+
+```python
+>>> import boto3
+>>> s3 = boto3.resource('s3')
+>>> for bucket in s3.buckets.all():
+        print(bucket.name)
+```
+
+
+`lumio-conf` does not create any configuration for the following tools,
 but simple examples are included here for completeness 
 
 ### Restic
