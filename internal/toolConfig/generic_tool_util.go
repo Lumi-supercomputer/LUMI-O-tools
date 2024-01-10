@@ -227,7 +227,9 @@ func disableValidationForSelectedTools(toolNamesToDisableS string, available []s
 }
 
 func setConfigPaths(pathM string, available []string, toolMap map[string]*ToolSettings) error {
-
+	if pathM == "" {
+		return nil
+	}
 	configPaths, err := parseConfigPathMapping(pathM)
 	if err != nil {
 		return err
