@@ -107,6 +107,26 @@ func ValidateRemote(tmpConfigPath string, remoteName string, commandName string,
 	return "", nil
 }
 
+func parseKeepMapping(confArg string) (map[string]bool, error) {
+	stringMap := util.RemoveWhiteSpaceAndSplit(confArg)
+	mappings := make(map[string]bool)
+	for _, mapping := range stringMap {
+		m := strings.Split(mapping, ":")
+		if len(m) != 2 {
+			newErr := errors.New(fmt.Sprintf("Incorrect format for argument to --keep-default. Is %s, should be tool1:true,tool2:false", confArg))
+			return nil, newErr
+		} else {
+
+			boolVal, err := strconv.ParseBool(m[1])
+			if err != nil {
+				return nil, errors.New(fmt.Sprintf("Error while parsing argument to --keep-default=%s. Error: %s", confArg, err.Error()))
+			}
+			mappings[m[0]] = boolVal
+		}
+	}
+	return mappings, nil
+}
+
 func parseConfigPathMapping(confArg string) (map[string]string, error) {
 	stringMap := util.RemoveWhiteSpaceAndSplit(confArg)
 	mappings := make(map[string]string)
@@ -137,7 +157,7 @@ func ParseCommandlineArguments(settings *Settings, toolMap map[string]*ToolSetti
 	var configPathMapping string
 	flag.StringVar(&configPathMapping, "config-path", "", "Comma separated list of config paths for the tools. E.g rclone:/path/to/config,s3cmd:/path/to/config2")
 	flag.StringVar(&skipValidation, "skip-validation", "", `Comma separated list of tools to skip validation for. WARNING: Might lead to a broken config`)
-	flag.StringVar(&keepDefault, "keep-default", "", "Comma separated list of tools to not switch defaults for. Valid values: all,s3cmd,aws")
+	flag.StringVar(&keepDefault, "keep-default", "", "Comma separated list of tools to not switch defaults for. Default value: s3cmd:true,aws:false")
 	flag.StringVar(&configuredTools, "configure-only", "", "Comma separated list of tools to create configurations for. Default is rclone and s3cmd")
 	flag.IntVar(&settings.Chunksize, "chunksize", 15, `s3cmd and aws cli chunk size, 5-5000, Files larger than SIZE, in MB, are automatically uploaded multithread-multipart (default: 15)`)
 	flag.BoolVar(&util.GlobalDebugFlag, "debug", false, "Keep temporary configs for debugging and display additional output")
@@ -175,7 +195,7 @@ func ParseCommandlineArguments(settings *Settings, toolMap map[string]*ToolSetti
 		return errors.New("Specifying rclone for --keep-default does not make sense as rclone does not have a default remote\n")
 	}
 
-	err = setKeepDefault(keepDefault, util.RemoveStringFromSlice(availableTools, "rclone"), toolMap)
+	err = setKeepDefaultToggle(keepDefault, util.RemoveStringFromSlice(availableTools, "rclone"), toolMap)
 	if err != nil {
 		return err
 	}
@@ -216,6 +236,26 @@ func setEnabledTools(toEnable string, available []string, toolMap map[string]*To
 		}
 	}
 	return genericSetter(toEnable, available, "IsEnabled", "--configure-only", toolMap)
+}
+
+func setKeepDefaultToggle(toolNamesToKeepDefaultsS string, available []string, toolMap map[string]*ToolSettings) error {
+	if toolNamesToKeepDefaultsS == "" {
+		return nil
+	}
+	keepBools, err := parseKeepMapping(toolNamesToKeepDefaultsS)
+	if err != nil {
+		return err
+	}
+	for k, v := range keepBools {
+		if !util.StringInSlice(k, available[:]) {
+			return errors.New(fmt.Sprintf("Unknown toolname %s in --keep-default", k))
+		} else {
+			fmt.Printf("Bool val for %s %t\n", k, v)
+			toolMap[k].NoReplace = v
+		}
+	}
+
+	return nil
 }
 
 func setKeepDefault(toolNamesToKeepDefaultsS string, available []string, toolMap map[string]*ToolSettings) error {

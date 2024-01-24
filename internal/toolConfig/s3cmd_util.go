@@ -77,7 +77,7 @@ func adds3cmdRemote(s3auth AuthInfo, tmpDir string, s3cmdSettings ToolSettings) 
 
 	if _, err := os.Stat(s3cmdBaseConfigPath); errors.Is(err, os.ErrNotExist) {
 		if s3cmdSettings.NoReplace {
-			fmt.Printf("WARNING: --keep-default-s3cmd-config used, but %s does not exists\n", s3cmdBaseConfigPath)
+			fmt.Printf("WARNING: --keep-default used with s3cmd, but %s does not exists\n", s3cmdBaseConfigPath)
 		}
 	}
 

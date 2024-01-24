@@ -85,7 +85,7 @@ var AwsSettings = ToolSettings{
 	IsEnabled:          false,
 	IsPresent:          false,
 	ValidationDisabled: false,
-	NoReplace:          false,
+	NoReplace:          true,
 	carefullUpdate:     true,
 	singleSection:      false,
 }

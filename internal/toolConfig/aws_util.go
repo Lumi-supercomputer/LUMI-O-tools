@@ -27,7 +27,6 @@ func deleteAwsEntry(path string, sectionNames []string) error {
 	if err == nil {
 		for _, sectionName := range sectionNames {
 			if cfg.HasSection(sectionName) {
-				fmt.Printf("Deleting profile configuration for %s in %s\n", sectionName, path)
 				cfg.DeleteSection(sectionName)
 				cfg.SaveTo(path)
 			}
@@ -117,7 +116,7 @@ func addAwsEndPoint(s3auth AuthInfo, tmpDir string, awsSettings ToolSettings) (s
 				fmt.Print("\tUnable to identify current default\n")
 			}
 		} else {
-			fmt.Printf("\tNo default config set")
+			fmt.Printf("\tNo default config set\n")
 		}
 
 	} else {
