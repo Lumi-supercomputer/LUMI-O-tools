@@ -160,6 +160,16 @@ func DeleteIniSectionsFromFile(filename string, sectionNames []string) error {
 
 }
 
+func IsDirectory(path string) bool {
+	currentu, _ := user.Current()
+	fileInfo, err := os.Stat(strings.Replace(path, "~", currentu.HomeDir, 1))
+	if err != nil {
+		return false
+	}
+
+	return fileInfo.IsDir()
+}
+
 func updateIniSections(filename string, data *ini.File, singleSection bool) error {
 	return modifySections(filename, data, false, singleSection)
 }

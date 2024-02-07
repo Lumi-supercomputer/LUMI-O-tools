@@ -55,8 +55,6 @@ Generated configurations will also be validated before committing. This can be d
 
 ## Environment variables
 
-
-
 - `LUMIO_SKIP_PROJID_CHECK` Set to any value to disable sanity check on the project number.
 By default the program verifies that the first three digits are correct and there is a corret number of digits (9) 
 - `TMPDIR` is used, if not set `/tmp/<username>/` is used. The temporary
@@ -64,6 +62,11 @@ directory is used to store configs before validation and commiting them.
 - `LUMIO_PROJECTID` Can be used to supply the projectid when using the `--noninteractive` flag. If used in conjunction with `--project-number`. The command line flag value will be used.
 - `LUMIO_S3_ACCESS` Used to supply the S3 access key when using the `--noninteractive` flag.
 - `LUMIO_S3_SECRET` Used to supply the S3 secret key when using the `--noninteractive` flag.
+- `LUMIO_AWS_CONFIG_FILE_PATH` Override the path (including filename) for the aws config file. By default 
+the file is named `config` when no custom path is specified for the aws credentials file.
+When a custom path is specified for the credentials file using `--config-path=aws:/path/credentials`,
+the config file will be placed in the same folder as the crendentials file and named `aws-config` 
+
 
 
 

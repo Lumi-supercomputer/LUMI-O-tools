@@ -37,14 +37,28 @@ func deleteAwsEntry(path string, sectionNames []string) error {
 	util.ReplaceInFile(path, regexp.MustCompile(`(?m)^@`), "  ")
 	return nil
 }
+
 func ValidateAwsRemote(awsCredentialFilepath string, remoteName string) error {
 	os.Setenv("AWS_SHARED_CREDENTIALS_FILE", awsCredentialFilepath)
 	os.Setenv("AWS_CONFIG_FILE", getAwsConfigFilePath(awsCredentialFilepath))
 	return util.CheckCommand("aws", "s3", "ls", "--profile", remoteName, "--cli-read-timeout", "2", "--cli-connect-timeout", "2")
 }
 
+// If we are saving the aws config file in a non standard location
+// Name it in a better fashion to avoid confusion
 func getAwsConfigFilePath(pathToCredFile string) string {
-	return filepath.Join(filepath.Dir(pathToCredFile), "config")
+	currentu, _ := user.Current()
+	customConfigFilePath, customPathisSet := os.LookupEnv("LUMIO_AWS_CONFIG_FILE_PATH")
+	if pathToCredFile == strings.Replace(systemDefaultConfigPaths["aws"], "~", currentu.HomeDir, -1) {
+		return filepath.Join(filepath.Dir(pathToCredFile), "config")
+
+	} else if customPathisSet {
+		return customConfigFilePath
+
+	} else {
+		return filepath.Join(filepath.Dir(pathToCredFile), "aws-config")
+
+	}
 }
 
 func appendDefaultAwsEndPoint(pathToCredFile string, info AuthInfo, remoteName string) error {

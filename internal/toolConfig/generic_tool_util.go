@@ -136,6 +136,12 @@ func parseConfigPathMapping(confArg string) (map[string]string, error) {
 			newErr := errors.New(fmt.Sprintf("Incorrect format for argument to --config-path. Is %s, should be tool1:path1,tool2:path2", confArg))
 			return nil, newErr
 		} else {
+
+			// We were passed a directory or something which looks like a directory
+			if strings.HasSuffix(m[1], "/") || util.IsDirectory(m[1]) {
+				newErr := errors.New(fmt.Sprintf("Incorrect argument to --config-path. %s:%s\n\tPath can not end with / or be an existing directory. Specify the full path to the config file", m[0], m[1]))
+				return nil, newErr
+			}
 			mappings[m[0]] = m[1]
 		}
 	}
@@ -155,7 +161,7 @@ func ParseCommandlineArguments(settings *Settings, toolMap map[string]*ToolSetti
 	var skipValidation string
 	var keepDefault string
 	var configPathMapping string
-	flag.StringVar(&configPathMapping, "config-path", "", "Comma separated list of config paths for the tools. E.g rclone:/path/to/config,s3cmd:/path/to/config2")
+	flag.StringVar(&configPathMapping, "config-path", "", "Comma separated list of config paths for the tools. E.g rclone:/path/to/configFile,s3cmd:/path/to/config2File")
 	flag.StringVar(&skipValidation, "skip-validation", "", `Comma separated list of tools to skip validation for. WARNING: Might lead to a broken config`)
 	flag.StringVar(&keepDefault, "keep-default", "", "Comma separated list of tools to not switch defaults for. Default value: s3cmd:true,aws:false")
 	flag.StringVar(&configuredTools, "configure-only", "", "Comma separated list of tools to create configurations for. Default is rclone and s3cmd")
