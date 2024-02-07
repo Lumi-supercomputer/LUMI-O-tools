@@ -49,7 +49,7 @@ func ValidateAwsRemote(awsCredentialFilepath string, remoteName string) error {
 func getAwsConfigFilePath(pathToCredFile string) string {
 	currentu, _ := user.Current()
 	customConfigFilePath, customPathisSet := os.LookupEnv("LUMIO_AWS_CONFIG_FILE_PATH")
-	if pathToCredFile == strings.Replace(systemDefaultConfigPaths["aws"], "~", currentu.HomeDir, -1) {
+	if pathToCredFile == strings.Replace(systemDefaultConfigPaths["aws"], "~", currentu.HomeDir, 1) {
 		return filepath.Join(filepath.Dir(pathToCredFile), "config")
 
 	} else if customPathisSet {
@@ -90,7 +90,7 @@ func getAwsSetting(a AuthInfo) map[string]map[string]string {
 
 func addAwsEndPoint(s3auth AuthInfo, tmpDir string, awsSettings ToolSettings) (string, error) {
 	currentu, _ := user.Current()
-	awsConfigPath := strings.Replace(awsSettings.configPath, "~", currentu.HomeDir, -1)
+	awsConfigPath := strings.Replace(awsSettings.configPath, "~", currentu.HomeDir, 1)
 	tmpAwsConfig := fmt.Sprintf("%s/temp_aws.config", tmpDir)
 	newConfig := getAwsSetting(s3auth)
 	if !awsSettings.NoReplace {

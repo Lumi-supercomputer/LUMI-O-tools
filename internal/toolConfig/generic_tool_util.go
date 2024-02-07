@@ -65,7 +65,7 @@ func DeleteConfigSection(programArgs Settings, toolMap map[string]*ToolSettings)
 			}
 		} else {
 			currentu, _ := user.Current()
-			config := strings.Replace(tool.configPath, "~", currentu.HomeDir, -1)
+			config := strings.Replace(tool.configPath, "~", currentu.HomeDir, 1)
 			err = util.DeleteIniSectionsFromFile(config, sectionsToDelete)
 			// Extra logic for deleting configuration for aws
 			if tool.Name == "aws" {

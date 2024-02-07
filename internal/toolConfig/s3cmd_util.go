@@ -29,7 +29,7 @@ func deleteExtraS3cmdConfig(configFile string, projectNames []string) error {
 	currentu, _ := user.Current()
 	if configFile == systemDefaultConfigPaths["s3cmd"] {
 		for _, projectName := range projectNames {
-			configFullPath := strings.Replace(configFile, "~", currentu.HomeDir, -1)
+			configFullPath := strings.Replace(configFile, "~", currentu.HomeDir, 1)
 			extraConfig := fmt.Sprintf("%s-%s", configFullPath, projectName)
 			if util.CheckFileExists(extraConfig) {
 				fmt.Printf("Removing profile %s by deleting the file %s\n", projectName, extraConfig)
@@ -64,7 +64,7 @@ func getS3cmdSetting(a AuthInfo) map[string]map[string]string {
 func adds3cmdRemote(s3auth AuthInfo, tmpDir string, s3cmdSettings ToolSettings) (string, error) {
 
 	currentu, _ := user.Current()
-	s3cmdBaseConfigPath := fmt.Sprintf("%s", strings.Replace(s3cmdSettings.configPath, "~", currentu.HomeDir, -1))
+	s3cmdBaseConfigPath := fmt.Sprintf("%s", strings.Replace(s3cmdSettings.configPath, "~", currentu.HomeDir, 1))
 	nonDefaultConfigPathSet := s3cmdSettings.configPath != systemDefaultConfigPaths["s3cmd"]
 	s3cmdConfigPath := s3cmdBaseConfigPath
 	tmps3cmdConfig := fmt.Sprintf("%s/temp_s3cmd.config", tmpDir)

@@ -42,7 +42,7 @@ func ValidateRcloneRemote(rcloneConfigFilePath string, remoteName string) error 
 
 func addRcloneRemotes(s3auth AuthInfo, tmpDir string, rcloneSettings ToolSettings) (string, error) {
 	currentu, _ := user.Current()
-	rcloneConfigPath := strings.Replace(rcloneSettings.configPath, "~", currentu.HomeDir, -1)
+	rcloneConfigPath := strings.Replace(rcloneSettings.configPath, "~", currentu.HomeDir, 1)
 	tmpRcloneConfig := fmt.Sprintf("%s/temp_rclone.config", tmpDir)
 	util.UpdateConfig(getRcloneSetting(s3auth), rcloneConfigPath, tmpRcloneConfig, rcloneSettings.carefullUpdate, rcloneSettings.singleSection)
 	remoteName := getPrivateRcloneRemoteName(s3auth.ProjectId)
