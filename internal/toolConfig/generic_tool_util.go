@@ -163,7 +163,7 @@ func ParseCommandlineArguments(settings *Settings, toolMap map[string]*ToolSetti
 	var configPathMapping string
 	flag.StringVar(&configPathMapping, "config-path", "", "Comma separated list of config paths for the tools. E.g rclone:/path/to/configFile,s3cmd:/path/to/config2File")
 	flag.StringVar(&skipValidation, "skip-validation", "", `Comma separated list of tools to skip validation for. WARNING: Might lead to a broken config`)
-	flag.StringVar(&keepDefault, "keep-default", "", "Comma separated list of tools to not switch defaults for. Default value: s3cmd:true,aws:false")
+	flag.StringVar(&keepDefault, "set-default", "", "Comma separated list of tools to switch defaults for. Default value: s3cmd:true,aws:false")
 	flag.StringVar(&configuredTools, "configure-only", "", "Comma separated list of tools to create configurations for. Default is rclone and s3cmd")
 	flag.IntVar(&settings.Chunksize, "chunksize", 15, `s3cmd and aws cli chunk size, 5-5000, Files larger than SIZE, in MB, are automatically uploaded multithread-multipart (default: 15)`)
 	flag.BoolVar(&util.GlobalDebugFlag, "debug", false, "Keep temporary configs for debugging and display additional output")
@@ -254,10 +254,12 @@ func setKeepDefaultToggle(toolNamesToKeepDefaultsS string, available []string, t
 	}
 	for k, v := range keepBools {
 		if !util.StringInSlice(k, available[:]) {
-			return errors.New(fmt.Sprintf("Unknown toolname %s in --keep-default", k))
+			return errors.New(fmt.Sprintf("Unknown toolname %s in --set-default", k))
 		} else {
-			fmt.Printf("Bool val for %s %t\n", k, v)
-			toolMap[k].NoReplace = v
+			util.PrintVerb(fmt.Sprintf("Bool val for %s %t\n", k, v))
+			// Nasty ! hack here as internally the bool is wether to keep the old default and not set a new default
+
+			toolMap[k].NoReplace = !v
 		}
 	}
 
