@@ -22,7 +22,7 @@ s3           =
 `
 
 func deleteAwsEntry(path string, sectionNames []string) error {
-	util.ReplaceInFile(path, regexp.MustCompile(`(?m)^\s+`), "@")
+	util.ReplaceInFile(path, regexp.MustCompile(`(?m)^[^\[]\s+`), "@")
 	cfg, err := ini.Load(path)
 	if err == nil {
 		for _, sectionName := range sectionNames {
