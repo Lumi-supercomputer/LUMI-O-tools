@@ -61,7 +61,11 @@ func main() {
 		}
 	}
 	authInfo.Chunksize = programArgs.Chunksize
-	tmpDir := util.CreateTmpDir("")
+	tmpDir, err := util.CreateTmpDir("")
+	if err != nil {
+		util.PrintErr(err, "tmpdir creation failed")
+		os.Exit(1)
+	}
 
 	for _, tool := range toolMap {
 		if !tool.IsEnabled {
@@ -80,7 +84,7 @@ func main() {
 				}
 				util.PrintErr(err, extraInfo)
 
-				if tool.Name ==  "aws" && err != nil && strings.Contains(err.Error(),"argument of type 'NoneType' is not iterable") {
+				if tool.Name == "aws" && err != nil && strings.Contains(err.Error(), "argument of type 'NoneType' is not iterable") {
 					fmt.Printf("Most likely wrong credentials, check access and secret key\n")
 				}
 			}

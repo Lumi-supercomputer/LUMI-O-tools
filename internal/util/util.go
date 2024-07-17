@@ -83,7 +83,10 @@ func GetMaxOptionLength() int {
 
 func SetCustomHelp() {
 
-	var usage = `usage: %s [OPTIONS]
+	var usage = `Usage: %s [OPTIONS]
+
+Command line tool to configure programs like rclone,s3cmd, aws cli and boto3 
+to use the LUMI-O object storage
     
 options:
    -h, --help%sShow this help message and exit`
@@ -101,24 +104,40 @@ options:
 	flag.VisitAll(flagF)
 }
 
-func UpdateConfig(config map[string]map[string]string, oldConfigFilePath string, newConfigFilePath string, carefull bool, singleSectionOnly bool) {
-	os.Create(newConfigFilePath)
-	os.Chmod(newConfigFilePath, 0600)
-	CommitTempConfigFile(oldConfigFilePath, newConfigFilePath)
+func UpdateConfig(config map[string]map[string]string, oldConfigFilePath string, newConfigFilePath string, carefull bool, singleSectionOnly bool) (string, error) {
+	_, err := os.Create(newConfigFilePath)
+	if err != nil {
+		return "Failed file creation", err
+	}
+	err = os.Chmod(newConfigFilePath, 0600)
+	if err != nil {
+		return "Failed chmod", err
+	}
+	info, err := CommitTempConfigFile(oldConfigFilePath, newConfigFilePath)
+	if err != nil {
+		return info, err
+	}
 	remoteConfig := ini.Empty()
 
 	for sectionName, m := range config {
 		for k, v := range m {
-			remoteConfig.Section(sectionName).NewKey(k, v)
+			_, err = remoteConfig.Section(sectionName).NewKey(k, v)
+			if err != nil {
+				return "Failed adding ini section", err
+			}
 		}
 	}
 
 	// Do not delete remote config before setting new values.
 	if carefull {
-		updateIniSections(newConfigFilePath, remoteConfig, singleSectionOnly)
+		err = updateIniSections(newConfigFilePath, remoteConfig, singleSectionOnly)
 	} else {
-		setIniSections(newConfigFilePath, remoteConfig, singleSectionOnly)
+		err = setIniSections(newConfigFilePath, remoteConfig, singleSectionOnly)
 	}
+	if err != nil {
+		return "Failed while editing ini sections", err
+	}
+	return "", nil
 }
 func RemoveWhiteSpaceAndSplit(a string) []string {
 	reg, _ := regexp.Compile(`\s+`)
@@ -130,7 +149,10 @@ func DeleteIniSectionsFromFile(filename string, sectionNames []string) error {
 		return err
 	}
 	cfg := ini.Empty()
-	cfg.Append(filename)
+	err := cfg.Append(filename)
+	if err != nil {
+		return err
+	}
 	var original_value = ""
 	if cfg.HasSection("default") {
 		df, _ := cfg.GetSection("default")
@@ -155,7 +177,7 @@ func DeleteIniSectionsFromFile(filename string, sectionNames []string) error {
 		}
 
 	}
-	err := cfg.SaveTo(filename)
+	err = cfg.SaveTo(filename)
 	return err
 
 }
@@ -175,7 +197,10 @@ func updateIniSections(filename string, data *ini.File, singleSection bool) erro
 }
 func modifySections(filename string, data *ini.File, setSection bool, oneSectionOnly bool) error {
 	cfg := ini.Empty()
-	cfg.Append(filename)
+	err := cfg.Append(filename)
+	if err != nil {
+		return err
+	}
 	if oneSectionOnly {
 		for _, sectionName := range cfg.SectionStrings() {
 			if !StringInSlice(sectionName, data.SectionStrings()) {
@@ -188,14 +213,20 @@ func modifySections(filename string, data *ini.File, setSection bool, oneSection
 		if cfg.HasSection(sectionName) && setSection {
 			cfg.DeleteSection(sectionName)
 		}
-		cfg.NewSection(sectionName)
+		_, err := cfg.NewSection(sectionName)
+		if err != nil {
+			return err
+		}
 		section, _ := cfg.GetSection(sectionName)
 		section2, _ := data.GetSection(sectionName)
 		for _, key := range section2.KeyStrings() {
-			section.NewKey(key, section2.Key(key).String())
+			_, err = section.NewKey(key, section2.Key(key).String())
+			if err != nil {
+				return err
+			}
 		}
 	}
-	err := cfg.SaveTo(filename)
+	err = cfg.SaveTo(filename)
 	return err
 }
 
@@ -224,7 +255,7 @@ func randStringRunes(n int) string {
 	return string(b)
 }
 
-func CreateTmpDir(path string) string {
+func CreateTmpDir(path string) (string, error) {
 	usern, _ := user.Current()
 
 	tmpdirPath := ""
@@ -238,8 +269,12 @@ func CreateTmpDir(path string) string {
 	} else {
 		tmpdirPath = fmt.Sprintf("/tmp/%s/lumio-temp-%s", usern.Username, randStringRunes(10))
 	}
-	os.MkdirAll(tmpdirPath, 0700)
-	return tmpdirPath
+	err := os.MkdirAll(tmpdirPath, 0700)
+	if err != nil {
+		return "", fmt.Errorf("failed creatig tmpdir at %s, error was: %s", tmpdirPath, err.Error())
+	}
+
+	return tmpdirPath, nil
 }
 
 func CheckCommand(command string, args ...string) error {
@@ -290,13 +325,17 @@ func CommitTempConfigFile(src string, dest string) (string, error) {
 			return fmt.Sprintf("Failed creating %s", dest), err
 		}
 		f.Close()
-		os.Chmod(dest, 0600)
+		err = os.Chmod(dest, 0600)
+		if err != nil {
+			return fmt.Sprintf("failed chmod on %s", dest), err
+		}
+
 	}
 	data, err := os.ReadFile(src)
 	if err != nil {
 		return fmt.Sprintf("Failed reading temporary config %s", src), err
 	}
-	os.WriteFile(dest, data, 0600)
+	err = os.WriteFile(dest, data, 0600)
 	if err != nil {
 		return fmt.Sprintf("Failed writing new config %s", dest), err
 	}

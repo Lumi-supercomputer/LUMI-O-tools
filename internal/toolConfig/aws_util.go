@@ -28,7 +28,10 @@ func deleteAwsEntry(path string, sectionNames []string) error {
 		for _, sectionName := range sectionNames {
 			if cfg.HasSection(sectionName) {
 				cfg.DeleteSection(sectionName)
-				cfg.SaveTo(path)
+				err = cfg.SaveTo(path)
+				if err != nil {
+					return fmt.Errorf("Failed writing to %s, error is: %s ", path, err.Error())
+				}
 			}
 		}
 	} else {
@@ -64,7 +67,10 @@ func getAwsConfigFilePath(pathToCredFile string) string {
 func appendDefaultAwsEndPoint(pathToCredFile string, info AuthInfo, remoteName string) error {
 	configFilePath := getAwsConfigFilePath(pathToCredFile)
 	sectionName := fmt.Sprintf("services %s", remoteName)
-	deleteAwsEntry(configFilePath, []string{sectionName})
+	err := deleteAwsEntry(configFilePath, []string{sectionName})
+	if err != nil {
+		return fmt.Errorf("failed while deleting aws config entry from %s, error is: %s", configFilePath, sectionName)
+	}
 	f, err := os.OpenFile(configFilePath,
 		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
@@ -97,11 +103,22 @@ func addAwsEndPoint(s3auth AuthInfo, tmpDir string, awsSettings ToolSettings) (s
 		newConfig["default"] = newConfig[getGenericRemoteName(s3auth.ProjectId)]
 		newConfig["default"]["original_name"] = getGenericRemoteName(s3auth.ProjectId)
 	}
-	util.UpdateConfig(newConfig, awsConfigPath, tmpAwsConfig, awsSettings.carefullUpdate, awsSettings.singleSection)
+	info, err := util.UpdateConfig(newConfig, awsConfigPath, tmpAwsConfig, awsSettings.carefullUpdate, awsSettings.singleSection)
+	if err != nil {
+		return info, err
+
+	}
 	remoteName := getGenericRemoteName(s3auth.ProjectId)
-	util.CommitTempConfigFile(getAwsConfigFilePath(awsConfigPath), getAwsConfigFilePath(tmpAwsConfig))
-	appendDefaultAwsEndPoint(tmpAwsConfig, s3auth, remoteName)
-	info, err := ValidateRemote(tmpAwsConfig, remoteName, "aws", ValidateAwsRemote, awsSettings.ValidationDisabled)
+	info, err = util.CommitTempConfigFile(getAwsConfigFilePath(awsConfigPath), getAwsConfigFilePath(tmpAwsConfig))
+	if err != nil {
+		return info, err
+	}
+	err = appendDefaultAwsEndPoint(tmpAwsConfig, s3auth, remoteName)
+	if err != nil {
+		return "", fmt.Errorf("failed appending default endpoint %s to %s", tmpAwsConfig, remoteName)
+	}
+
+	info, err = ValidateRemote(tmpAwsConfig, remoteName, "aws", ValidateAwsRemote, awsSettings.ValidationDisabled)
 	if err != nil {
 		return info, err
 	}
@@ -119,7 +136,7 @@ func addAwsEndPoint(s3auth AuthInfo, tmpDir string, awsSettings ToolSettings) (s
 	fmt.Printf("Updated aws config %s\n\n", awsConfigPath)
 	if awsSettings.NoReplace {
 		fmt.Printf("New profile not set as default, use the --profile flag to use the generated config\n")
-		cfg, err := ini.Load(awsConfigPath)
+		cfg, _ := ini.Load(awsConfigPath)
 		default_config, err := cfg.GetSection("default")
 		if err == nil {
 			default_real_name, err := default_config.GetKey("original_name")

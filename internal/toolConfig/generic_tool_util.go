@@ -67,6 +67,9 @@ func DeleteConfigSection(programArgs Settings, toolMap map[string]*ToolSettings)
 			currentu, _ := user.Current()
 			config := strings.Replace(tool.configPath, "~", currentu.HomeDir, 1)
 			err = util.DeleteIniSectionsFromFile(config, sectionsToDelete)
+			if err != nil {
+				return fmt.Errorf("failed deleting section in %s, error is: %s", config, err.Error())
+			}
 			// Extra logic for deleting configuration for aws
 			if tool.Name == "aws" {
 
@@ -215,7 +218,7 @@ func ParseCommandlineArguments(settings *Settings, toolMap map[string]*ToolSetti
 
 	// Chuncksize option is not used for rlcone so don't verify unless needed.
 	if toolMap["s3cmd"].IsEnabled || toolMap["aws"].IsEnabled {
-		validateChunksize(settings)
+		return validateChunksize(settings)
 	}
 
 	return nil
@@ -266,9 +269,10 @@ func setKeepDefaultToggle(toolNamesToKeepDefaultsS string, available []string, t
 	return nil
 }
 
-func setKeepDefault(toolNamesToKeepDefaultsS string, available []string, toolMap map[string]*ToolSettings) error {
-	return genericSetter(toolNamesToKeepDefaultsS, available, "NoReplace", "--keep-default", toolMap)
-}
+// Not used
+//func setKeepDefault(toolNamesToKeepDefaultsS string, available []string, toolMap map[string]*ToolSettings) error {
+//	return genericSetter(toolNamesToKeepDefaultsS, available, "NoReplace", "--keep-default", toolMap)
+//}
 
 func disableValidationForSelectedTools(toolNamesToDisableS string, available []string, toolMap map[string]*ToolSettings) error {
 	return genericSetter(toolNamesToDisableS, available, "ValidationDisabled", "--skip-validation", toolMap)
@@ -355,7 +359,7 @@ func GetUserInput(a *AuthInfo, argProjId int) error {
 		i, _ := fmt.Scanf("%s", &inputVal)
 		a.ProjectId, err = strconv.Atoi(inputVal)
 		if err != nil || i == 0 {
-			return errors.New("Failed to read Lumi project number, make sure there are only numbers in the input")
+			return errors.New("failed to read Lumi project number, make sure there are only numbers in the input")
 		}
 	} else {
 		a.ProjectId = argProjId

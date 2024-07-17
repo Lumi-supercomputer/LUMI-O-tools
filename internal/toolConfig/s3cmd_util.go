@@ -64,13 +64,16 @@ func getS3cmdSetting(a AuthInfo) map[string]map[string]string {
 func adds3cmdRemote(s3auth AuthInfo, tmpDir string, s3cmdSettings ToolSettings) (string, error) {
 
 	currentu, _ := user.Current()
-	s3cmdBaseConfigPath := fmt.Sprintf("%s", strings.Replace(s3cmdSettings.configPath, "~", currentu.HomeDir, 1))
+	s3cmdBaseConfigPath := strings.Replace(s3cmdSettings.configPath, "~", currentu.HomeDir, 1)
 	nonDefaultConfigPathSet := s3cmdSettings.configPath != systemDefaultConfigPaths["s3cmd"]
 	s3cmdConfigPath := s3cmdBaseConfigPath
 	tmps3cmdConfig := fmt.Sprintf("%s/temp_s3cmd.config", tmpDir)
 	remoteName := getGenericRemoteName(s3auth.ProjectId)
-	util.UpdateConfig(getS3cmdSetting(s3auth), s3cmdConfigPath, tmps3cmdConfig, s3cmdSettings.carefullUpdate, s3cmdSettings.singleSection)
-	info, err := ValidateRemote(tmps3cmdConfig, remoteName, "s3cmd", ValidateS3cmdRemote, s3cmdSettings.ValidationDisabled)
+	info, err := util.UpdateConfig(getS3cmdSetting(s3auth), s3cmdConfigPath, tmps3cmdConfig, s3cmdSettings.carefullUpdate, s3cmdSettings.singleSection)
+	if err != nil {
+		return info, err
+	}
+	info, err = ValidateRemote(tmps3cmdConfig, remoteName, "s3cmd", ValidateS3cmdRemote, s3cmdSettings.ValidationDisabled)
 	if err != nil {
 		return info, err
 	}

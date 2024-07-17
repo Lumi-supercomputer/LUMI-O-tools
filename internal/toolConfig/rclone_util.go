@@ -44,9 +44,12 @@ func addRcloneRemotes(s3auth AuthInfo, tmpDir string, rcloneSettings ToolSetting
 	currentu, _ := user.Current()
 	rcloneConfigPath := strings.Replace(rcloneSettings.configPath, "~", currentu.HomeDir, 1)
 	tmpRcloneConfig := fmt.Sprintf("%s/temp_rclone.config", tmpDir)
-	util.UpdateConfig(getRcloneSetting(s3auth), rcloneConfigPath, tmpRcloneConfig, rcloneSettings.carefullUpdate, rcloneSettings.singleSection)
+	info, err := util.UpdateConfig(getRcloneSetting(s3auth), rcloneConfigPath, tmpRcloneConfig, rcloneSettings.carefullUpdate, rcloneSettings.singleSection)
+	if err != nil {
+		return info, err
+	}
 	remoteName := getPrivateRcloneRemoteName(s3auth.ProjectId)
-	info, err := ValidateRemote(tmpRcloneConfig, remoteName, "rclone", ValidateRcloneRemote, rcloneSettings.ValidationDisabled)
+	info, err = ValidateRemote(tmpRcloneConfig, remoteName, "rclone", ValidateRcloneRemote, rcloneSettings.ValidationDisabled)
 	if err != nil {
 		return info, err
 	}

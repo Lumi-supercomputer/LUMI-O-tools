@@ -27,7 +27,8 @@ In the web interface, choose first the project you wish to use.
 Next generate a new key or use existing valid key
 Open the Key details view and based on that give following information`
 
-type remoteNameFunc func(int) string
+// Unused
+//type remoteNameFunc func(int) string
 type AddRemote func(s3auth AuthInfo, tmpDir string, toolsettings ToolSettings) (string, error)
 
 type Settings struct {
