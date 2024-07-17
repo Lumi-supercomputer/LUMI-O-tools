@@ -79,6 +79,10 @@ func main() {
 					fmt.Printf("WARNING: %s command missing (if %s is a shell alias this script will not find it)\n", tool.Name, tool.Name)
 				}
 				util.PrintErr(err, extraInfo)
+
+				if tool.Name ==  "aws" && err != nil && strings.Contains(err.Error(),"argument of type 'NoneType' is not iterable") {
+					fmt.Printf("Most likely wrong credentials, check access and secret key\n")
+				}
 			}
 		}
 	}
