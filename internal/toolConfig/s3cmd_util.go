@@ -56,6 +56,7 @@ func getS3cmdSetting(a AuthInfo) map[string]map[string]string {
 		"enable_multipart":     "True",
 		"signature_v2":         "True",
 		"use_https":            "True",
+		"signurl_use_https": 	"True", 							     
 		"chunk_size":           fmt.Sprintf("%d", a.Chunksize)}
 	return s3cmdSettings
 
