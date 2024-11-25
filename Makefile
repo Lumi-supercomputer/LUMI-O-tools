@@ -1,6 +1,6 @@
 
 GH=$(shell git rev-parse --short HEAD)
-V=$(shell git tag --points-at HEAD)
+V=$(shell git tag --points-at HEAD | head -n 1)
 T=$(shell date +"%Y-%m-%dT%H:%M:%S%z")
 D=$(shell git diff --quiet || echo 'dirty')
 
