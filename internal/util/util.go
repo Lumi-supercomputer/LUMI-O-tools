@@ -331,13 +331,19 @@ func CommitTempConfigFile(src string, dest string) (string, error) {
 		}
 
 	}
-	data, err := os.ReadFile(src)
+	_, err = os.Stat(src)
+	// Source does not exists -> First time user is configuring the tool
 	if err != nil {
-		return fmt.Sprintf("Failed reading temporary config %s", src), err
-	}
-	err = os.WriteFile(dest, data, 0600)
-	if err != nil {
-		return fmt.Sprintf("Failed writing new config %s", dest), err
+		PrintVerb("No old configuration exists, starting from a blank slate\n")			
+	} else {
+		data, err := os.ReadFile(src)
+		if err != nil {
+			return fmt.Sprintf("Failed reading temporary config %s", src), err
+		}
+		err = os.WriteFile(dest, data, 0600)
+		if err != nil {
+			return fmt.Sprintf("Failed writing new config %s", dest), err
+		}
 	}
 	return "", nil
 }
