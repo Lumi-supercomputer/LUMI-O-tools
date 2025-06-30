@@ -19,6 +19,7 @@ const lumioS3serviceConfig = `[services %s]
 s3           = 
   endpoint_url = %s
   multipart_chunksize = %d
+  max_upload_parts = 1000
 `
 
 func deleteAwsEntry(path string, sectionNames []string) error {
