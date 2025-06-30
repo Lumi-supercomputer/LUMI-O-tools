@@ -72,13 +72,14 @@ func getRcloneSetting(a AuthInfo) map[string]map[string]string {
 	sharedRemoteSettings := map[string]string{
 		"type":              "s3",
 		"provider":          "Ceph",
+		"max_upload_parts":  "1000",
 		"env_auth":          "false",
 		"project_id":        fmt.Sprintf("%d", a.ProjectId),
 		"access_key_id":     a.s3AccessKey,
 		"secret_access_key": a.s3SecretKey,
 		"endpoint":          a.Url}
 	rcloneSettings[privateRemoteName] = util.MergeMaps(map[string]string{"acl": "private"}, sharedRemoteSettings)
-	rcloneSettings[publicRemoteName] = util.MergeMaps(map[string]string{"acl": "public"}, sharedRemoteSettings)
+	rcloneSettings[publicRemoteName] = util.MergeMaps(map[string]string{"acl": "public-read"}, sharedRemoteSettings)
 
 	return rcloneSettings
 }
